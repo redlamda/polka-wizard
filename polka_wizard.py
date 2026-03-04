@@ -1,1037 +1,1183 @@
+"""
+POLKA MUP — Outil de Cotation Logistique
+Version 7 — Wizard professionnel avec calculs transparents
+"""
 import streamlit as st
-import math
 
-# ─────────────────────────────────────────────────────────────────────────────
-# PAGE CONFIG
-# ─────────────────────────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="Polka MUP — Scientific Costing Wizard",
-    page_icon="📦",
-    layout="wide",
-    initial_sidebar_state="expanded",
+st.set_page_config(page_title="Polka MUP", page_icon="📦", layout="wide",
+                   initial_sidebar_state="collapsed")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STYLE
+# ══════════════════════════════════════════════════════════════════════════════
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+.stApp { background: #0a0e1a; color: #dde3f0; }
+.main .block-container { padding: 0 2rem 3rem 2rem; max-width: 1320px; }
+#MainMenu, footer, header, .stDeployButton { visibility: hidden; display: none; }
+
+/* ── Header ── */
+.mup-header {
+  background: linear-gradient(90deg,#0d1224 0%,#111827 100%);
+  border-bottom: 1px solid #1e2a45;
+  padding: 14px 32px;
+  display: flex; align-items: center; justify-content: space-between;
+  margin: -1rem -2rem 0 -2rem; margin-bottom: 0;
+}
+.mup-logo { font-size:1.4rem; font-weight:700; color:#fff; letter-spacing:-0.5px; }
+.mup-logo span { color:#3b82f6; }
+.mup-project { text-align:right; }
+.mup-project .name { font-size:0.92rem; font-weight:600; color:#e2e8f0; }
+.mup-project .sub  { font-size:0.72rem; color:#64748b; margin-top:1px; }
+
+/* ── Sticky KPI bar ── */
+.kpi-bar {
+  display:grid; grid-template-columns:repeat(5,1fr);
+  background:#0d1224; border-bottom:1px solid #1e2a45;
+  margin: 0 -2rem 1.5rem -2rem; padding: 0 2rem;
+}
+.kpi-cell { padding:10px 16px; border-right:1px solid #1e2a45; }
+.kpi-cell:last-child { border-right:none; }
+.kpi-lbl { font-size:0.62rem; text-transform:uppercase; letter-spacing:1.2px; color:#64748b; margin-bottom:2px; }
+.kpi-val { font-family:'JetBrains Mono',monospace; font-size:1.2rem; font-weight:600; color:#e2e8f0; }
+.kpi-val.up   { color:#22c55e; }
+.kpi-val.down { color:#ef4444; }
+.kpi-val.blue { color:#3b82f6; }
+.kpi-sub { font-size:0.68rem; color:#475569; margin-top:1px; }
+
+/* ── Step wizard nav ── */
+.wizard-nav {
+  display:flex; align-items:center; gap:0; margin-bottom:2rem;
+  background:#0d1224; border:1px solid #1e2a45; border-radius:10px; overflow:hidden; padding:6px;
+  gap:4px;
+}
+.wstep {
+  flex:1; text-align:center; padding:8px 4px; border-radius:7px;
+  font-size:0.72rem; font-weight:500; color:#475569; cursor:pointer;
+  transition:all .15s; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.wstep.done { color:#64748b; }
+.wstep.done:hover { background:#1e2a45; color:#94a3b8; }
+.wstep.active { background:#3b82f6; color:#fff; font-weight:600; }
+.wstep .dot { display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+.wstep.active .dot { background:#fff; }
+.wstep.done .dot { background:#22c55e; }
+.wstep.todo .dot { background:#1e2a45; }
+.wstep.todo { color:#334155; }
+
+/* ── Main layout: left = form, right = calc panel ── */
+.step-grid { display:grid; grid-template-columns:1fr 400px; gap:1.5rem; align-items:start; }
+
+/* ── Form card ── */
+.form-card {
+  background:#0d1224; border:1px solid #1e2a45; border-radius:12px;
+  padding:1.6rem 1.8rem;
+}
+.form-section { margin-bottom:1.4rem; }
+.form-section-title {
+  font-size:0.68rem; text-transform:uppercase; letter-spacing:1.5px;
+  color:#3b82f6; font-weight:600; margin-bottom:1rem;
+  padding-bottom:8px; border-bottom:1px solid #1e2a45;
+}
+
+/* ── Calc panel ── */
+.calc-panel {
+  background:#060b14; border:1px solid #1e2a45; border-radius:12px;
+  padding:1.4rem; position:sticky; top:0;
+}
+.calc-panel-title {
+  font-size:0.65rem; text-transform:uppercase; letter-spacing:1.5px;
+  color:#64748b; font-weight:600; margin-bottom:1rem;
+}
+.calc-block {
+  background:#0d1224; border:1px solid #1e2a45; border-radius:8px;
+  padding:10px 12px; margin-bottom:8px;
+}
+.calc-label { font-size:0.7rem; color:#64748b; margin-bottom:4px; }
+.calc-formula { font-size:0.72rem; color:#94a3b8; font-family:'JetBrains Mono',monospace; margin-bottom:6px; line-height:1.5; }
+.calc-result {
+  font-size:1.1rem; font-weight:600; font-family:'JetBrains Mono',monospace;
+  color:#e2e8f0;
+}
+.calc-result.highlight { color:#3b82f6; }
+.calc-result.green { color:#22c55e; }
+.calc-result.red   { color:#ef4444; }
+.calc-total {
+  border-top:1px solid #1e2a45; padding-top:10px; margin-top:6px;
+  display:flex; justify-content:space-between; align-items:center;
+}
+.calc-total-label { font-size:0.75rem; color:#94a3b8; font-weight:500; }
+.calc-total-value { font-size:1.3rem; font-weight:700; font-family:'JetBrains Mono',monospace; color:#3b82f6; }
+
+/* ── Inputs ── */
+.stNumberInput input, .stTextInput input, .stSelectbox > div {
+  background:#060b14 !important; border:1px solid #1e2a45 !important;
+  border-radius:7px !important; color:#dde3f0 !important;
+  font-family:'JetBrains Mono',monospace !important; font-size:0.88rem !important;
+}
+.stNumberInput input:focus, .stTextInput input:focus {
+  border-color:#3b82f6 !important;
+  box-shadow:0 0 0 3px rgba(59,130,246,.12) !important;
+}
+label { font-size:0.76rem !important; color:#94a3b8 !important; font-weight:500 !important; }
+
+/* ── Table in process/price steps ── */
+.trow { display:grid; gap:6px; padding:6px 0; border-bottom:1px solid #1e2a45; align-items:center; }
+.trow:last-child { border-bottom:none; }
+.tcell { font-size:0.8rem; }
+.tcell.mono { font-family:'JetBrains Mono',monospace; font-size:0.8rem; }
+.tcell.dim  { color:#475569; }
+.thdr { font-size:0.62rem; text-transform:uppercase; letter-spacing:1px; color:#475569; font-weight:600; }
+
+/* ── Progress arrow ── */
+.prog-arrow {
+  display:flex; gap:0; align-items:center; margin-bottom:1.5rem; flex-wrap:nowrap;
+}
+.prog-seg {
+  flex:1; height:4px; background:#1e2a45; margin-right:2px; border-radius:2px;
+  transition:background .3s;
+}
+.prog-seg.done   { background:#22c55e; }
+.prog-seg.active { background:#3b82f6; }
+
+/* ── Nav buttons ── */
+.stButton > button {
+  border-radius:8px !important; font-size:0.84rem !important; font-weight:600 !important;
+  padding:8px 24px !important;
+}
+.stButton > button[kind="primary"] {
+  background:linear-gradient(135deg,#3b82f6,#2563eb) !important;
+  border:none !important; color:#fff !important;
+  box-shadow:0 2px 12px rgba(59,130,246,.35) !important;
+}
+.stButton > button:not([kind="primary"]) {
+  background:#0d1224 !important; border:1px solid #1e2a45 !important; color:#64748b !important;
+}
+.stButton > button:not([kind="primary"]):hover {
+  border-color:#3b82f6 !important; color:#3b82f6 !important;
+}
+
+/* ── Radio pills ── */
+.stRadio > label { display:none !important; }
+.stRadio [data-baseweb="radio"] > div:first-child {
+  border-color:#3b82f6 !important;
+}
+
+/* ── Checkboxes ── */
+.stCheckbox { margin:0 !important; }
+
+/* ── Metrics ── */
+[data-testid="metric-container"] {
+  background:#0d1224 !important; border:1px solid #1e2a45 !important;
+  border-radius:8px !important; padding:10px 14px !important;
+}
+
+/* ── Divider ── */
+hr { border-color:#1e2a45 !important; margin:.8rem 0 !important; }
+
+/* ── Badge ── */
+.badge { display:inline-block; padding:1px 8px; border-radius:4px; font-size:0.65rem; font-weight:600; text-transform:uppercase; letter-spacing:.5px; }
+.badge-blue  { background:rgba(59,130,246,.15); color:#3b82f6; border:1px solid rgba(59,130,246,.25); }
+.badge-green { background:rgba(34,197,94,.15);  color:#22c55e; border:1px solid rgba(34,197,94,.25); }
+.badge-red   { background:rgba(239,68,68,.15);  color:#ef4444; border:1px solid rgba(239,68,68,.25); }
+.badge-gray  { background:rgba(100,116,139,.15);color:#94a3b8; border:1px solid rgba(100,116,139,.25); }
+</style>
+""", unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DEFAULTS — AKZO NOBEL reference (exact MUP Excel 2021 values)
+# ══════════════════════════════════════════════════════════════════════════════
+_D = dict(
+    project="AKZO NOBEL", customer="AKZO NOBEL",
+    branch="MA-Mohammedia (580)", project_leader="Tayeb Sbihi",
+    country="Maroc", country_org="Morocco",
+    business_unit="ELS", sector="Peintures & Revêtements",
+    working_days=272, target_margin=20.0, interest_rate=9.0, contract_years=3,
+    wms="MIKADO", wms_alloc_pct=1.7, ho_alloc_pct=0.8625,
+    exchange_rate=0.094, term_payment=30, failure_rate=5.0, social_pct=14.2,
+    wh_surface=1600.0, wh_height=10.0, gross_loc=1741.0, op_reserve_pct=10.0,
+    rent_mad=44.5, charges_mad=3.5, taxes_mad=5.04,
+    racking_ppl=35.0, racking_qty=1741.0,
+    security_m2=5.0, cabling_m2=5.0,
+    lower_shelf_qty=110.0, lower_shelf_price=38.0,
+    grating_qty=550.0, grating_price=20.0,
+    invest_years=12.0, avg_pal=1772.0,
 )
 
-# ─────────────────────────────────────────────────────────────────────────────
-# LANGUAGE STRINGS
-# ─────────────────────────────────────────────────────────────────────────────
-LANG = {
-    "EN": {
-        "step_labels": [
-            "1 · Project Info",
-            "2 · Branch Basic Data",
-            "3 · Warehouse",
-            "4 · Personnel",
-            "5 · Industrial Trucks",
-            "6 · Processes & Volumes",
-            "7 · Price Sheet",
-            "8 · Results",
-        ],
-        "s1_title": "Project Information",
-        "s1_project": "Project", "s1_branch": "Branch",
-        "s1_project_leader": "Project Leader", "s1_country_org": "Country Organisation",
-        "s1_country": "Country", "s1_date": "Data Period",
-        "s1_business_unit": "Business Unit", "s1_customer": "Customer Name",
-        "s1_sector": "Sector / Description",
-        "s2_title": "Branch Basic Data",
-        "s2_working_days": "Yearly Working Days",
-        "s2_interest_rate": "Internal Interest Rate (for Investments) %",
-        "s2_target_margin": "Target Profit Margin %",
-        "s2_wms": "Warehouse Management System (WMS)",
-        "s2_wms_alloc": "WMS Allocation %",
-        "s2_fluctuation": "Fluctuation Rate %",
-        "s2_deduction_reserve": "Deduction of the Operative Reserve %",
-        "s2_failure_rate": "Failure Rate of the Equipment %",
-        "s2_exchange_rate": "Exchange Rate (1 MAD = ? EUR)",
-        "s2_contract_years": "Contract Period in Years",
-        "s2_ho_alloc": "HO Allocation %",
-        "s2_term_payment": "Term of Payment in Days",
-        "s2_domino_alloc": "DOMINO Allocation per Parcel (Code P1) %",
-        "s2_premium_order": "Premium Rate per Order (€)",
-        "s3_title": "Warehouse",
-        "s3_wh_surface": "Warehouse Surface (m²)",
-        "s3_wh_height": "Warehouse Height (m)",
-        "s3_gross_loc": "No. of Gross Pallet Locations",
-        "s3_ded_zone": "Deduction Inbound/Outbound Zone",
-        "s3_ded_unusable": "Deduction Unusable Locations",
-        "s3_op_reserve": "Operative Reserve %",
-        "s3_net_loc": "Net Pallet Locations (Sellable)",
-        "s3_rent_mad": "Rent (MAD/m²/month)",
-        "s3_charges": "Additional Charges (MAD/m²/month)",
-        "s3_idilite": "Tax / Idilité (MAD/m²/month)",
-        "s3_total_rent_mad": "Total Rent (MAD/m²/month)",
-        "s3_total_rent_eur": "Total Rent (€/m²/month)",
-        "s3_racking_ppl": "Racking System (€/PPL)",
-        "s3_racking_qty": "Racking Quantity (PPL)",
-        "s3_security": "Security (€/m²)",
-        "s3_cabling": "Cabling (€/m²)",
-        "s3_lower_shelf_qty": "Lower Shelves (pieces)",
-        "s3_lower_shelf_price": "Lower Shelf price (€/piece)",
-        "s3_grating_qty": "Caillebotis (pieces)",
-        "s3_grating_price": "Caillebotis (€/piece)",
-        "s3_invest_depr_years": "Depreciation Years",
-        "s3_peak_pal": "Peak Pallet Need",
-        "s3_avg_pal": "Average Pallet Need",
-        "s4_title": "Personnel",
-        "s4_op_title": "Logistics Operatives",
-        "s4_adm_title": "Office / Administrative",
-        "s4_mgmt_title": "Management",
-        "s4_role": "Role", "s4_qty": "Qty (FTE)", "s4_salary": "Gross Annual Salary (€)",
-        "s4_illness": "Illness %", "s4_holidays": "Holidays (days)",
-        "s4_weekly_h": "Weekly h", "s4_allowance": "Allowance %",
-        "s5_title": "Industrial Trucks",
-        "s5_truck": "Truck Type", "s5_qty": "Qty",
-        "s5_rent_purchase": "Rent / Purchase",
-        "s5_price": "Price incl. Battery (€)",
-        "s5_battery": "Battery Change (€)",
-        "s5_depr_years": "Depr. Years",
-        "s6_title": "Processes & Volumes",
-        "s6_inbound_title": "Inbound",
-        "s6_picking_title": "Picking",
-        "s6_relocation_title": "Relocation",
-        "s6_outbound_title": "Removal of Full Pallets",
-        "s6_loading_title": "Loading",
-        "s6_storage_title": "Storage",
-        "s6_active": "Active", "s6_volume": "Annual Volume",
-        "s6_unit": "Unit", "s6_pg": "Per h (Productive)", "s6_pn": "Per h (Payed)",
-        "s7_title": "Price Sheet",
-        "s7_storage_price": "Storage Price (€/location/month)",
-        "s7_fixed_monthly": "Fixed Monthly Lump Sum (€/month)",
-        "s7_process": "Process", "s7_unit": "Billing Unit",
-        "s7_price": "Price per Unit (€)", "s7_volume": "Volume",
-        "s7_ca": "Annual Turnover (€)", "s7_cost": "Annual Cost (€)", "s7_margin": "Margin %",
-        "s8_title": "Results & Summary",
-        "s8_ca": "Total Annual Turnover (€)", "s8_cost": "Total Annual Costs (€)",
-        "s8_profit": "Profit (€)", "s8_margin": "Profit Margin %",
-        "s8_target": "Target Margin %", "s8_gap": "Gap vs Target",
-        "btn_next": "Next →", "btn_prev": "← Back", "btn_calc": "Calculate",
-        "sb_hint": "💡 Pre-filled from AKZO NOBEL reference project (MUP 2021)",
-        "cost_wh": "Warehouse", "cost_pers": "Personnel", "cost_trucks": "Industrial Trucks",
-        "annual_rent": "Annual Rent", "racking": "Racking", "security_cabling": "Security + Cabling",
-        "other_inv": "Other Investments", "total": "TOTAL",
-        "net_locations": "Net Pallet Locations", "avg_storage": "Average Pallets in Storage",
-        "social_charges": "Social Charges %",
-        "variable_costs": "Variable Costs", "fixed_costs": "Fixed Costs",
-        "cost_breakdown": "Cost Breakdown", "revenue_breakdown": "Revenue Breakdown",
-        "project_summary": "Project Summary",
-    },
-    "FR": {
-        "step_labels": [
-            "1 · Infos Projet",
-            "2 · Données de Base",
-            "3 · Entrepôt",
-            "4 · Personnel",
-            "5 · Engins",
-            "6 · Processus & Volumes",
-            "7 · Grille Tarifaire",
-            "8 · Résultats",
-        ],
-        "s1_title": "Informations Projet",
-        "s1_project": "Projet", "s1_branch": "Agence",
-        "s1_project_leader": "Chef de Projet", "s1_country_org": "Organisation Pays",
-        "s1_country": "Pays", "s1_date": "Période des Données",
-        "s1_business_unit": "Business Unit", "s1_customer": "Nom du Client",
-        "s1_sector": "Secteur / Description",
-        "s2_title": "Données de Base Agence",
-        "s2_working_days": "Jours Ouvrés / An",
-        "s2_interest_rate": "Taux d'Intérêt Interne %",
-        "s2_target_margin": "Marge Cible %",
-        "s2_wms": "Système WMS",
-        "s2_wms_alloc": "Allocation WMS %",
-        "s2_fluctuation": "Taux de Fluctuation %",
-        "s2_deduction_reserve": "Déduction Réserve Opérative %",
-        "s2_failure_rate": "Taux de Panne des Engins %",
-        "s2_exchange_rate": "Taux de Change (1 MAD = ? EUR)",
-        "s2_contract_years": "Durée du Contrat (années)",
-        "s2_ho_alloc": "Allocation HO %",
-        "s2_term_payment": "Délai de Paiement (jours)",
-        "s2_domino_alloc": "Allocation DOMINO par Colis (Code P1) %",
-        "s2_premium_order": "Taux de Prime par Commande (€)",
-        "s3_title": "Entrepôt",
-        "s3_wh_surface": "Surface Entrepôt (m²)",
-        "s3_wh_height": "Hauteur Entrepôt (m)",
-        "s3_gross_loc": "Nb d'Emplacements Bruts",
-        "s3_ded_zone": "Déduction Zone Entrée/Sortie",
-        "s3_ded_unusable": "Déduction Empl. Non Utilisables",
-        "s3_op_reserve": "Réserve Opérative %",
-        "s3_net_loc": "Emplacements Nets (Vendables)",
-        "s3_rent_mad": "Loyer (MAD/m²/mois)",
-        "s3_charges": "Charges (MAD/m²/mois)",
-        "s3_idilite": "Idilité/Taxes (MAD/m²/mois)",
-        "s3_total_rent_mad": "Loyer Total (MAD/m²/mois)",
-        "s3_total_rent_eur": "Loyer Total (€/m²/mois)",
-        "s3_racking_ppl": "Rayonnage (€/emplacement)",
-        "s3_racking_qty": "Quantité Rayonnage (PPL)",
-        "s3_security": "Sécurité (€/m²)",
-        "s3_cabling": "Câblage (€/m²)",
-        "s3_lower_shelf_qty": "Étagères Basses (pièces)",
-        "s3_lower_shelf_price": "Étagères Basses (€/pièce)",
-        "s3_grating_qty": "Caillebotis (pièces)",
-        "s3_grating_price": "Caillebotis (€/pièce)",
-        "s3_invest_depr_years": "Durée d'Amortissement (ans)",
-        "s3_peak_pal": "Besoin Max Palettes",
-        "s3_avg_pal": "Besoin Moyen Palettes",
-        "s4_title": "Personnel",
-        "s4_op_title": "Opérationnels Logistiques",
-        "s4_adm_title": "Administratifs / Bureau",
-        "s4_mgmt_title": "Management",
-        "s4_role": "Rôle", "s4_qty": "Qté (ETP)", "s4_salary": "Salaire Brut Annuel (€)",
-        "s4_illness": "Absence %", "s4_holidays": "Congés (jours)",
-        "s4_weekly_h": "Heures Hebdo", "s4_allowance": "Tolérance %",
-        "s5_title": "Engins de Manutention",
-        "s5_truck": "Type d'Engin", "s5_qty": "Qté",
-        "s5_rent_purchase": "Location / Achat",
-        "s5_price": "Prix incl. Batterie (€)",
-        "s5_battery": "Batterie Rechange (€)",
-        "s5_depr_years": "Amort. (ans)",
-        "s6_title": "Processus & Volumes",
-        "s6_inbound_title": "Réception (Inbound)",
-        "s6_picking_title": "Préparation (Picking)",
-        "s6_relocation_title": "Réapprovisionnement",
-        "s6_outbound_title": "Sortie Palette Complète",
-        "s6_loading_title": "Chargement (Loading)",
-        "s6_storage_title": "Stockage",
-        "s6_active": "Actif", "s6_volume": "Volume Annuel",
-        "s6_unit": "Unité", "s6_pg": "Prod. Brute / h", "s6_pn": "Prod. Nette / h (Payée)",
-        "s7_title": "Grille Tarifaire",
-        "s7_storage_price": "Tarif Stockage (€/emplacement/mois)",
-        "s7_fixed_monthly": "Forfait Fixe Mensuel (€/mois)",
-        "s7_process": "Processus", "s7_unit": "Unité de Facturation",
-        "s7_price": "Tarif Unitaire (€)", "s7_volume": "Volume",
-        "s7_ca": "CA Annuel (€)", "s7_cost": "Coût Annuel (€)", "s7_margin": "Marge %",
-        "s8_title": "Résultats & Synthèse",
-        "s8_ca": "CA Total Annuel (€)", "s8_cost": "Coûts Totaux Annuels (€)",
-        "s8_profit": "Profit (€)", "s8_margin": "Marge Réelle %",
-        "s8_target": "Marge Cible %", "s8_gap": "Écart vs Cible",
-        "btn_next": "Suivant →", "btn_prev": "← Retour", "btn_calc": "Calculer",
-        "sb_hint": "💡 Pré-rempli depuis le projet référence AKZO NOBEL (MUP 2021)",
-        "cost_wh": "Entrepôt", "cost_pers": "Personnel", "cost_trucks": "Engins",
-        "annual_rent": "Loyer Annuel", "racking": "Rayonnage", "security_cabling": "Sécu + Câblage",
-        "other_inv": "Autres Investissements", "total": "TOTAL",
-        "net_locations": "Emplacements Nets", "avg_storage": "Palettes Moyennes en Stock",
-        "social_charges": "Charges Sociales %",
-        "variable_costs": "Coûts Variables", "fixed_costs": "Coûts Fixes",
-        "cost_breakdown": "Décomposition des Coûts", "revenue_breakdown": "Détail du CA",
-        "project_summary": "Fiche Projet",
-    }
-}
-
-# ─────────────────────────────────────────────────────────────────────────────
-# REFERENCE DATA — AKZO NOBEL (exact values from MUP Excel)
-# ─────────────────────────────────────────────────────────────────────────────
-AKZO = {
-    "project": "AKZO NOBEL", "branch": "MA-Mohammedia (580)",
-    "project_leader": "Tayeb Sbihi", "country_org": "Morocco",
-    "country": "Marocco", "business_unit": "ELS",
-    "customer": "AKZO NOBEL", "sector": "Peintures & Revêtements",
-    "working_days": 272, "interest_rate": 9.0, "target_margin": 20.0,
-    "wms": "MIKADO", "wms_alloc": 1.7, "fluctuation": 0.0,
-    "deduction_reserve": 10.0, "failure_rate": 5.0,
-    "exchange_rate": 0.094, "contract_years": 3,
-    "ho_alloc": 0.8625, "term_payment": 30,
-    "domino_alloc": 1.7, "premium_order": 0.15,
-    "wh_surface": 1600, "wh_height": 10.0,
-    "gross_loc": 1741, "ded_zone": 0, "ded_unusable": 0,
-    "op_reserve": 10.0, "net_loc": 1567,
-    "rent_mad": 44.5, "charges_mad": 3.5, "idilite_mad": 5.04,
-    "total_rent_mad": 53.04, "total_rent_eur": 5.1772322,
-    "racking_ppl": 35.0, "racking_qty": 1741,
-    "security_eur_m2": 5.0, "cabling_eur_m2": 5.0,
-    "lower_shelf_qty": 110, "lower_shelf_price": 38.0,
-    "grating_qty": 550, "grating_price": 20.0,
-    "invest_depr_years": 12, "peak_pal": 2413, "avg_pal": 1772,
-    "social_charges_pct": 14.2,
-}
-
-AKZO_PERSONNEL_OP = [
-    {"role_en": "Picker",             "role_fr": "Préparateur",           "qty": 1,   "salary": 7964,  "illness": 4.97, "holidays": 25, "weekly_h": 44, "paid_h": 8, "allowance": 9.0, "pct_fixed": 0.0},
-    {"role_en": "Forklift driver",    "role_fr": "Cariste",               "qty": 1,   "salary": 7964,  "illness": 4.97, "holidays": 25, "weekly_h": 44, "paid_h": 8, "allowance": 9.0, "pct_fixed": 0.0},
-    {"role_en": "Loader",             "role_fr": "Chargeur",              "qty": 1,   "salary": 6500,  "illness": 4.97, "holidays": 25, "weekly_h": 44, "paid_h": 8, "allowance": 9.0, "pct_fixed": 0.0},
-    {"role_en": "Unloader",           "role_fr": "Déchargeur",            "qty": 0,   "salary": 6500,  "illness": 4.97, "holidays": 25, "weekly_h": 44, "paid_h": 8, "allowance": 9.0, "pct_fixed": 0.0},
-    {"role_en": "Inbound controller", "role_fr": "Contrôleur Réception",  "qty": 0,   "salary": 6500,  "illness": 4.97, "holidays": 25, "weekly_h": 44, "paid_h": 8, "allowance": 9.0, "pct_fixed": 0.0},
-    {"role_en": "Warehouse Skilled Employee", "role_fr": "Agent Logistique Qualifié", "qty": 0, "salary": 13722, "illness": 4.97, "holidays": 25, "weekly_h": 44, "paid_h": 8, "allowance": 9.0, "pct_fixed": 0.0},
-    {"role_en": "Team Leader (Process Relevant)", "role_fr": "Team Leader (Opérationnel)", "qty": 0, "salary": 13722, "illness": 4.97, "holidays": 25, "weekly_h": 44, "paid_h": 8, "allowance": 9.0, "pct_fixed": 0.0},
+_PERSONNEL = [
+    # en, fr, qty, salary, cat (OP/ADM/MGT)
+    ("Picker",                      "Préparateur de commandes",     1,    7964, "OP"),
+    ("Forklift driver",             "Cariste",                       1,    7964, "OP"),
+    ("Loader",                      "Chargeur / Déchargeur",         1,    6500, "OP"),
+    ("Inbound controller",          "Contrôleur réception",          0,    6500, "OP"),
+    ("WH skilled employee",         "Agent logistique qualifié",     0,   13722, "OP"),
+    ("Team leader (operative)",     "Team leader opérationnel",      0,   13722, "OP"),
+    ("Team leader (admin)",         "Team leader administratif",     1,   13722, "ADM"),
+    ("Stock manager",               "Gestionnaire de stock",         0.5, 13722, "ADM"),
+    ("Site assistant",              "Assistant de site",             0,    9818, "ADM"),
+    ("Inbound admin",               "Administratif entrée",          0,   13722, "ADM"),
+    ("Outbound admin",              "Administratif sortie",          0,   13722, "ADM"),
+    ("Operations manager",          "Responsable opérations",       0.15, 31000, "MGT"),
+    ("CL-Consultant / DEWO",        "Consultant CL / DEWO",         0.20, 25000, "MGT"),
+    ("Contract logistics manager",  "Directeur logistique",          0,   65243, "MGT"),
 ]
 
-AKZO_PERSONNEL_ADM = [
-    {"role_en": "Team Leader (Not Process Relevant)", "role_fr": "Team Leader (Encadrement)", "qty": 1,   "salary": 13722, "illness": 4.97, "holidays": 25, "weekly_h": 44, "paid_h": 8, "pct_fixed": 1.0},
-    {"role_en": "Stock manager",                      "role_fr": "Gestionnaire de Stock",     "qty": 0.5, "salary": 13722, "illness": 4.97, "holidays": 25, "weekly_h": 44, "paid_h": 8, "pct_fixed": 1.0},
-    {"role_en": "Site assistant",                     "role_fr": "Assistant de Site",         "qty": 0,   "salary": 9818,  "illness": 4.97, "holidays": 25, "weekly_h": 44, "paid_h": 8, "pct_fixed": 1.0},
-    {"role_en": "Inbound Administration",             "role_fr": "Administratif Entrée",      "qty": 0,   "salary": 13722, "illness": 4.97, "holidays": 25, "weekly_h": 44, "paid_h": 8, "pct_fixed": 1.0},
-    {"role_en": "Outbound Administration",            "role_fr": "Administratif Sortie",      "qty": 0,   "salary": 13722, "illness": 4.97, "holidays": 25, "weekly_h": 44, "paid_h": 8, "pct_fixed": 1.0},
-    {"role_en": "Outbound controller",                "role_fr": "Contrôleur Sortie",         "qty": 0,   "salary": 6500,  "illness": 4.97, "holidays": 25, "weekly_h": 44, "paid_h": 8, "pct_fixed": 1.0},
-    {"role_en": "HSE Manager",                        "role_fr": "Responsable HSE",           "qty": 0,   "salary": 13722, "illness": 4.97, "holidays": 25, "weekly_h": 44, "paid_h": 8, "pct_fixed": 1.0},
+_TRUCKS = [
+    # code, en, fr, qty, mode, price_incl_bat, depr_years
+    ("FZ0010","Hand Pallet Truck",          "Transpalette manuel",         0,"Purchase",    375,  6),
+    ("FZ0020","Picking Trolley",            "Chariot de picking",          0,"Purchase",    700,  6),
+    ("FZ0040","Fast Mover",                 "Fast Mover",                  1,"External Rent",12732,6),
+    ("FZ0050","Horizontal Order Picker",    "Préparateur horizontal",      1,"External Rent",14279,6),
+    ("FZ0060","Vertical Order Picker 1.2m", "Préparateur vertical 1.2m",  0,"External Rent",14230,6),
+    ("FZ0070","Front Loader",               "Chariot frontal",             0,"External Rent",27716,6),
+    ("FZ0080","Reach Truck ≤ 8m",           "Chariot rétractable ≤ 8m",   0,"External Rent",37188,6),
+    ("FZ0085","Reach Truck > 8m",           "Chariot rétractable > 8m",   1,"External Rent",50718,6),
+    ("FZ0090","Narrow-Aisle Truck",         "Chariot allée étroite",       0,"External Rent",103000,6),
+    ("FZ0100","Floor Sweeper",              "Autolaveuse",                 0,"External Rent", 21500,8),
 ]
 
-AKZO_PERSONNEL_MGMT = [
-    {"role_en": "Operations Manager",         "role_fr": "Responsable Opérations", "qty": 0.15, "salary": 31000, "pct_fixed": 1.0},
-    {"role_en": "CL-Consultant / DEWO",       "role_fr": "Consultant CL / DEWO",   "qty": 0.20, "salary": 25000, "pct_fixed": 1.0},
-    {"role_en": "Contract Logistics Manager", "role_fr": "Directeur Logistique",   "qty": 0.0,  "salary": 65243, "pct_fixed": 1.0},
+# code, en, fr, grp, billing_en, billing_fr, vol, prod_gross, prod_net, cost_unit_eur, price_default_eur
+_PROCESSES = [
+    ("WE1", "Inbound Full Pallet",           "Réception Palette Homogène",       "inbound",    "Delivered Inbound - Pallets","Palettes entrée",       2733,  49.49, 42.56, 1.8007, 2.2509),
+    ("WE2", "Inbound Mixed Pallet",          "Réception Palette Hétérogène",     "inbound",    "Stock-in Inbound - Pallets", "Palettes stockées",     1275,  30.67, 26.38, 2.3463, 2.9329),
+    ("WE4", "Retour Vrac",                   "Retour Vrac",                       "inbound",    "Picking Unit Loose",         "Colis vrac",            3245, 124.33,106.92, 0.2906, 0.3632),
+    ("KO1", "Picking ASC",                   "Picking ASC",                       "picking",    "Picks",                      "Picks ASC",            45131, 155.54,133.77, 0.4214, 0.5268),
+    ("KO2", "Picking MPY & Powder",          "Picking MPY & Poudre",              "picking",    "Picks",                      "Picks MPY/Poudre",      9529,  46.99, 40.41, 0.6510, 0.8137),
+    ("UL1", "Replenishment Picking ASC",     "Réappro. Picking ASC",              "relocation", "Partial Relocation Pallets", "Palettes réappro.",     5319,  16.48, 14.18, 0.0,    0.0),
+    ("UL2", "Replenishment Picking MPY",     "Réappro. Picking MPY & Poudre",    "relocation", "Relocation Pallets",         "Palettes relocation",    243,  16.82, 14.47, 0.0,    0.0),
+    ("AV1", "Outbound Full Pallet",          "Sortie Palette Complète",           "outbound",   "Full Pallets",               "Palettes complètes",    2613,  24.09, 20.72, 1.4333, 1.7916),
+    ("VL1", "Loading Pallets",               "Chargement Palettes",               "loading",    "Loaded Pallet",              "Palettes chargées",     3713,  25.22, 21.69, 1.0626, 1.3283),
+    ("VL4", "Loading Parcels (Loose)",       "Chargement Colis Vrac",             "loading",    "Loose Loaded Cartons",       "Colis chargés vrac",    6869,  48.49, 41.71, 0.5526, 0.6907),
 ]
 
-AKZO_TRUCKS = [
-    {"code": "FZ0010", "name_en": "Hand Pallet Truck",              "name_fr": "Transpalette Manuel",          "qty": 0, "rent_purchase": "Purchase",      "price": 375,       "battery": 0,    "depr_years": 6, "pct_fixed": 1.0},
-    {"code": "FZ0020", "name_en": "Picking Trolley",                "name_fr": "Chariot de Picking",           "qty": 0, "rent_purchase": "Purchase",      "price": 700,       "battery": 0,    "depr_years": 6, "pct_fixed": 0.5},
-    {"code": "FZ0030", "name_en": "Double-Deck Loader",             "name_fr": "Chargeur Double Plateau",      "qty": 0, "rent_purchase": "External Rent", "price": 9344,      "battery": 2126, "depr_years": 6, "pct_fixed": 0.5},
-    {"code": "FZ0040", "name_en": "Fast Mover",                     "name_fr": "Fast Mover",                   "qty": 1, "rent_purchase": "External Rent", "price": 10606.05,  "battery": 2126, "depr_years": 6, "pct_fixed": 0.5},
-    {"code": "FZ0050", "name_en": "Horizontal Order Picker",        "name_fr": "Préparateur Horizontal",       "qty": 1, "rent_purchase": "External Rent", "price": 11956.35,  "battery": 2323, "depr_years": 6, "pct_fixed": 0.5},
-    {"code": "FZ0060", "name_en": "Vertical Order Picker 1.20m",    "name_fr": "Préparateur Vertical 1.20m",   "qty": 0, "rent_purchase": "External Rent", "price": 11664.45,  "battery": 2566, "depr_years": 6, "pct_fixed": 0.5},
-    {"code": "FZ0070", "name_en": "Front Loader",                   "name_fr": "Chariot Frontal",              "qty": 0, "rent_purchase": "External Rent", "price": 22644.3,   "battery": 5072, "depr_years": 6, "pct_fixed": 0.5},
-    {"code": "FZ0080", "name_en": "Reach Truck <= 8m Lift Height",  "name_fr": "Chariot Rétractable ≤ 8m",    "qty": 0, "rent_purchase": "External Rent", "price": 31089.45,  "battery": 6099, "depr_years": 6, "pct_fixed": 0.5},
-    {"code": "FZ0085", "name_en": "Reach Truck > 8m Lift Height",   "name_fr": "Chariot Rétractable > 8m",    "qty": 1, "rent_purchase": "External Rent", "price": 44618.70,  "battery": 6099, "depr_years": 6, "pct_fixed": 0.5},
-    {"code": "FZ0090", "name_en": "Narrow-Aisle Truck",             "name_fr": "Chariot Allée Étroite",        "qty": 0, "rent_purchase": "External Rent", "price": 95000,     "battery": 8000, "depr_years": 6, "pct_fixed": 0.5},
-    {"code": "FZ0100", "name_en": "Floor Sweeper (wet)",            "name_fr": "Autolaveuse",                  "qty": 0, "rent_purchase": "External Rent", "price": 21500,     "battery": 0,    "depr_years": 8, "pct_fixed": 0.5},
-    {"code": "FZ0110", "name_en": "Floor Sweeper (dry)",            "name_fr": "Balayeuse",                    "qty": 0, "rent_purchase": "External Rent", "price": 15650,     "battery": 0,    "depr_years": 8, "pct_fixed": 0.5},
-    {"code": "FZ0120", "name_en": "Clamp Truck",                    "name_fr": "Chariot à Pince",              "qty": 0, "rent_purchase": "External Rent", "price": 0,         "battery": 0,    "depr_years": 6, "pct_fixed": 0.5},
-    {"code": "FZ0130", "name_en": "Nacelle (Work Platform)",        "name_fr": "Nacelle",                      "qty": 0, "rent_purchase": "External Rent", "price": 0,         "battery": 0,    "depr_years": 6, "pct_fixed": 0.5},
-]
 
-AKZO_PROCESSES = [
-    # INBOUND
-    {"code": "WE1",  "group": "inbound",    "name_en": "Inbound Full Pallet (Unloading not double-stacked)", "name_fr": "Réception Palette Homogène (Déchargement)", "active": True,  "volume": 2733,  "unit_en": "Delivered Inbound - Pallets", "unit_fr": "Palettes Entrée",          "prod_gross": 49.49,  "prod_net": 42.56},
-    {"code": "WE1s", "group": "inbound",    "name_en": "Stock-in Full Pallet (Stocking Without Transfer Zone)", "name_fr": "Mise en Stock Palette Homogène",         "active": True,  "volume": 2733,  "unit_en": "Stock-in Inbound - Pallets", "unit_fr": "Palettes Mise en Stock",   "prod_gross": 30.67,  "prod_net": 26.38},
-    {"code": "WE2",  "group": "inbound",    "name_en": "Inbound Mixed Pallet (Unloading)",                    "name_fr": "Réception Palette Hétérogène",             "active": True,  "volume": 255,   "unit_en": "Delivered Inbound - Pallets","unit_fr": "Palettes Hétérogènes",     "prod_gross": 49.49,  "prod_net": 42.56},
-    {"code": "WE2s", "group": "inbound",    "name_en": "Separation of Mixed Pallets",                         "name_fr": "Constitution Palette Homogène (Séparation)","active": True, "volume": 8925,  "unit_en": "Picking Unit Inbound Loose", "unit_fr": "Colis Éclatés",            "prod_gross": 220.83, "prod_net": 189.91},
-    {"code": "WE4",  "group": "inbound",    "name_en": "Retour Vrac (Loose Unloading)",                       "name_fr": "Retour Vrac (Déchargement Vrac)",          "active": True,  "volume": 3245,  "unit_en": "Picking Unit Inbound Loose", "unit_fr": "Colis Vrac",               "prod_gross": 124.33, "prod_net": 106.92},
-    # PICKING
-    {"code": "KO1",  "group": "picking",    "name_en": "Picking ASC (Picking Pallet - Manual Wrapping)",      "name_fr": "Picking ASC (Colis/Article)",              "active": True,  "volume": 45131, "unit_en": "Picks",                      "unit_fr": "Picks",                    "prod_gross": 155.54, "prod_net": 133.77},
-    {"code": "KO2",  "group": "picking",    "name_en": "Picking MPY & Powder (Picking Pallet - Manual Wrapping)","name_fr": "Picking MPY & Poudre",                 "active": True,  "volume": 9529,  "unit_en": "Picks",                      "unit_fr": "Picks",                    "prod_gross": 46.99,  "prod_net": 40.41},
-    # RELOCATION
-    {"code": "UL1",  "group": "relocation", "name_en": "Replenishment Picking ASC (Partial Reloc. by Forklift Without TZ)", "name_fr": "Réappro. Picking ASC (Relocation Partielle)", "active": True, "volume": 5319,  "unit_en": "Partial Relocation Pallets", "unit_fr": "Palettes Réappro",         "prod_gross": 16.48,  "prod_net": 14.18},
-    {"code": "UL2",  "group": "relocation", "name_en": "Replenishment Picking MPY & POWDER (Reloc. Without TZ)","name_fr": "Réappro. Picking MPY (Relocation Sans ZT)", "active": True, "volume": 243,   "unit_en": "Relocation Pallets",         "unit_fr": "Palettes Relocation",      "prod_gross": 16.82,  "prod_net": 14.47},
-    # OUTBOUND
-    {"code": "AV1",  "group": "outbound",   "name_en": "Outbound Full Pallet (Without Transfer Zone)",        "name_fr": "Sortie Palette Complète (Sans Zone Transit)", "active": True, "volume": 2613,  "unit_en": "Full Pallets",               "unit_fr": "Palettes Complètes",       "prod_gross": 24.09,  "prod_net": 20.72},
-    # LOADING
-    {"code": "VL1",  "group": "loading",    "name_en": "Loading Pallets (Loading Pallets not Double-Stacked)", "name_fr": "Chargement Palettes",                      "active": True,  "volume": 3713,  "unit_en": "Loaded Pallet",              "unit_fr": "Palettes Chargées",        "prod_gross": 25.22,  "prod_net": 21.69},
-    {"code": "VL4",  "group": "loading",    "name_en": "Loading Parcels (Loose Loading)",                     "name_fr": "Chargement Colis (Chargement Vrac)",       "active": True,  "volume": 6869,  "unit_en": "Loose Loaded Cartons",       "unit_fr": "Colis Chargés",            "prod_gross": 48.49,  "prod_net": 41.71},
-]
-
-AKZO_PRICES = [
-    {"code": "storage", "name_en": "Warehouse Costs — Storage",       "name_fr": "Coûts Entrepôt — Stockage",        "billing_en": "Pallet Location / Month", "billing_fr": "Emplacement / Mois",      "price": 7.64,    "cost_unit": 6.0636},
-    {"code": "fixed",   "name_en": "Fixed Costs — Monthly Lump Sum",  "name_fr": "Coûts Fixes — Forfait Mensuel",    "billing_en": "Month",                   "billing_fr": "Mois",                    "price": 6228.92, "cost_unit": 4983.14},
-    {"code": "WE1",     "name_en": "Inbound Full Pallet",              "name_fr": "Réception Palette Homogène",       "billing_en": "Delivered Inbound - Pallets","billing_fr": "Palette",               "price": 2.2509,  "cost_unit": 1.8007},
-    {"code": "WE2",     "name_en": "Inbound Mixed Pallet",             "name_fr": "Réception Palette Hétérogène",     "billing_en": "Stock-in Inbound - Pallets","billing_fr": "Palette Stockée",        "price": 2.9329,  "cost_unit": 2.3463},
-    {"code": "WE4",     "name_en": "Retour Vrac",                      "name_fr": "Retour Vrac",                      "billing_en": "Picking Unit Inbound Loose","billing_fr": "Unité Vrac",             "price": 0.3632,  "cost_unit": 0.2906},
-    {"code": "KO1",     "name_en": "Picking ASC",                      "name_fr": "Picking ASC",                      "billing_en": "Picks",                   "billing_fr": "Picks",                   "price": 0.5268,  "cost_unit": 0.4214},
-    {"code": "KO2",     "name_en": "Picking MPY & Powder",             "name_fr": "Picking MPY & Poudre",             "billing_en": "Picks",                   "billing_fr": "Picks",                   "price": 0.8137,  "cost_unit": 0.6510},
-    {"code": "AV1",     "name_en": "Full Pallet Removal",              "name_fr": "Sortie Palette Complète",          "billing_en": "Full Pallets",            "billing_fr": "Palettes Complètes",      "price": 1.7916,  "cost_unit": 1.4333},
-    {"code": "VL1",     "name_en": "Loading Pallets",                  "name_fr": "Chargement Palettes",              "billing_en": "Loaded Pallet",           "billing_fr": "Palette Chargée",         "price": 1.3283,  "cost_unit": 1.0626},
-    {"code": "VL4",     "name_en": "Loading Parcels",                  "name_fr": "Chargement Colis",                 "billing_en": "Loose Loaded Cartons",    "billing_fr": "Colis Chargé",            "price": 0.6907,  "cost_unit": 0.5526},
-]
-
-# ─────────────────────────────────────────────────────────────────────────────
-# CALCULATION ENGINE (mirrors MUP Excel formulas)
-# ─────────────────────────────────────────────────────────────────────────────
-
-def calc_net_locations(gross, ded_zone, ded_unusable, op_reserve_pct):
-    avail = gross - ded_zone - ded_unusable
-    return round(avail * (1 - op_reserve_pct / 100))
-
-def calc_invest_annual(invest_total, interest_rate_pct, depr_years, maintenance_pct=1.0):
-    """Annual cost of an investment: depreciation + average interest + maintenance."""
-    r = interest_rate_pct / 100
-    depr = invest_total / depr_years
-    interest = invest_total * r * (depr_years + 1) / (2 * depr_years)
-    maintenance = invest_total * maintenance_pct / 100
-    return depr + interest + maintenance
-
-def calc_warehouse_costs(d):
-    surf = d.get("wh_surface", 1600)
-    rent_eur = d.get("total_rent_eur", 5.177)
-    r = d.get("interest_rate", 9.0)
-    dy = d.get("invest_depr_years", 12)
-
-    # Office (100 m²) rent + office equipment
-    office_rent = 100 * rent_eur * 12
-    office_equip_invest = 1.85 * 1364  # 1.85 FTE admin × 1364€
-    office_equip_annual = calc_invest_annual(office_equip_invest, r, 12, 1.0)
-    office_total = office_rent + office_equip_annual
-
-    # Warehouse rent
-    wh_rent = surf * rent_eur * 12
-
-    # Racking
-    rack_invest = d.get("racking_ppl", 35) * d.get("racking_qty", 1741)
-    rack_annual = calc_invest_annual(rack_invest, r, dy, 1.0)
-
-    # Security
-    sec_invest = d.get("security_eur_m2", 5) * surf
-    sec_annual = calc_invest_annual(sec_invest, r, 5, 1.0)
-
-    # Cabling
-    cab_invest = d.get("cabling_eur_m2", 5) * surf
-    cab_annual = calc_invest_annual(cab_invest, r, 5, 1.0)
-
-    # Lower shelves
-    ls_invest = d.get("lower_shelf_qty", 110) * d.get("lower_shelf_price", 38)
-    ls_annual = calc_invest_annual(ls_invest, r, dy, 1.0) if ls_invest > 0 else 0
-
-    # Caillebotis
-    gr_invest = d.get("grating_qty", 550) * d.get("grating_price", 20)
-    gr_annual = calc_invest_annual(gr_invest, r, dy, 1.0) if gr_invest > 0 else 0
-
-    total = office_total + wh_rent + rack_annual + sec_annual + cab_annual + ls_annual + gr_annual
-    return {
-        "office": office_total,
-        "rent": wh_rent,
-        "racking": rack_annual,
-        "security": sec_annual,
-        "cabling": cab_annual,
-        "shelves": ls_annual,
-        "grating": gr_annual,
-        "total": total,
-    }
-
-def calc_truck_annual(price, battery, qty, rent_purchase, depr_years, interest_rate):
-    """MUP formula: for rented trucks, annualise total investment."""
-    if qty == 0:
-        return 0
-    invest = (price + battery) * qty
-    return calc_invest_annual(invest, interest_rate, depr_years, 2.0)
-
-def calc_personnel_annual(salary, qty, social_pct):
-    return salary * qty * (1 + social_pct / 100)
-
-# ─────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 # SESSION STATE
-# ─────────────────────────────────────────────────────────────────────────────
-if "step" not in st.session_state:
-    st.session_state.step = 0
-if "lang" not in st.session_state:
-    st.session_state.lang = "FR"
-if "currency" not in st.session_state:
-    st.session_state.currency = "EUR"
-if "period" not in st.session_state:
-    st.session_state.period = "annual"   # "annual" | "monthly"
-if "d" not in st.session_state:
-    st.session_state.d = {}
-
-def T(key):
-    return LANG[st.session_state.lang].get(key, key)
-
-def SL():
-    return LANG[st.session_state.lang]["step_labels"]
-
-def get(key, default=None):
-    if key in st.session_state.d:
-        return st.session_state.d[key]
-    if key in AKZO:
-        return AKZO[key]
-    return default
-
-def put(key, val):
-    st.session_state.d[key] = val
-
-# ── Currency helpers ──
-def cur_symbol():
-    return "MAD" if st.session_state.currency == "MAD" else "€"
-
-def cur_rate():
-    """Return the MAD→EUR conversion factor. If currency=MAD, no conversion (factor=1/fx to go EUR→MAD)."""
-    fx = float(get("exchange_rate", 0.094))
-    if st.session_state.currency == "MAD":
-        return 1.0 / fx if fx > 0 else 10.638  # EUR→MAD
-    return 1.0  # already in EUR
-
-def to_display(eur_value):
-    """Convert an EUR value to display currency."""
-    return eur_value * cur_rate()
-
-def from_display(display_value):
-    """Convert a display-currency value back to EUR (for storage)."""
-    r = cur_rate()
-    return display_value / r if r != 0 else display_value
-
-def fmt_cur(eur_value, decimals=0):
-    """Format a EUR value in display currency."""
-    v = to_display(eur_value)
-    sym = cur_symbol()
-    if decimals == 0:
-        return f"{v:,.0f} {sym}"
-    else:
-        return f"{v:,.{decimals}f} {sym}"
-
-def cur_label(base_label):
-    """Replace € symbol in a label with the active currency symbol."""
-    sym = cur_symbol()
-    return base_label.replace("€", sym).replace("EUR", sym)
-
-def period_factor():
-    """1 for annual, 1/12 for monthly."""
-    return 1.0 if st.session_state.period == "annual" else 1.0 / 12.0
-
-def period_label():
-    """Human label for selected period."""
-    lang = st.session_state.lang
-    if st.session_state.period == "annual":
-        return "Annuel" if lang == "FR" else "Annual"
-    return "Mensuel" if lang == "FR" else "Monthly"
-
-def fmt_period(eur_annual, decimals=0):
-    """Format a EUR annual value → display currency × period factor."""
-    v = to_display(eur_annual * period_factor())
-    sym = cur_symbol()
-    if decimals == 0:
-        return f"{v:,.0f} {sym}"
-    return f"{v:,.{decimals}f} {sym}"
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SIDEBAR
-# ─────────────────────────────────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown("## 📦 Polka MUP Wizard")
-
-    lang = st.radio("🌐 Language / Langue", ["FR", "EN"], horizontal=True,
-                    index=0 if st.session_state.lang == "FR" else 1)
-    if lang != st.session_state.lang:
-        st.session_state.lang = lang
-        st.rerun()
-
-    currency = st.radio("💱 Devise / Currency", ["EUR (€)", "MAD (درهم)"], horizontal=True,
-                        index=0 if st.session_state.currency == "EUR" else 1)
-    new_cur = "EUR" if currency.startswith("EUR") else "MAD"
-    if new_cur != st.session_state.currency:
-        st.session_state.currency = new_cur
-        st.rerun()
-
-    period_choice = st.radio(
-        "📅 Vue / View",
-        ["Annuel / Annual", "Mensuel / Monthly"],
-        horizontal=True,
-        index=0 if st.session_state.period == "annual" else 1
-    )
-    new_period = "annual" if period_choice.startswith("Annuel") else "monthly"
-    if new_period != st.session_state.period:
-        st.session_state.period = new_period
-        st.rerun()
-
-    # Show live exchange rate info
-    fx = float(get("exchange_rate", 0.094))
-    if st.session_state.currency == "MAD":
-        st.caption(f"1 € = {1/fx:,.2f} MAD  (taux : {fx:.4f})")
-    else:
-        st.caption(f"1 MAD = {fx:.4f} €")
-
-    st.markdown("---")
-    for i, label in enumerate(SL()):
-        is_cur = i == st.session_state.step
-        if st.button(
-            ("▶ " if is_cur else "  ") + label,
-            key=f"nav_{i}", use_container_width=True,
-            type="primary" if is_cur else "secondary"
-        ):
-            st.session_state.step = i
-            st.rerun()
-
-    st.markdown("---")
-    st.info(T("sb_hint"))
-
-# ─────────────────────────────────────────────────────────────────────────────
-# NAV + PROGRESS
-# ─────────────────────────────────────────────────────────────────────────────
-def nav(step_idx, total=8):
-    c1, _, c2 = st.columns([1, 4, 1])
-    with c1:
-        if step_idx > 0:
-            if st.button(T("btn_prev"), use_container_width=True):
-                st.session_state.step -= 1; st.rerun()
-    with c2:
-        if step_idx < total - 1:
-            if st.button(T("btn_next"), use_container_width=True, type="primary"):
-                st.session_state.step += 1; st.rerun()
-
-def prog(i, total=8):
-    st.progress((i + 1) / total, text=f"**{SL()[i]}** — {i+1}/{total}")
-
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 1 — PROJECT INFO
-# ─────────────────────────────────────────────────────────────────────────────
-def step1():
-    st.header(f"📋  {T('s1_title')}")
-    prog(0)
-    st.markdown("---")
-    c1, c2 = st.columns(2)
-    with c1:
-        for k, lk in [("project", "s1_project"), ("customer", "s1_customer"),
-                      ("project_leader", "s1_project_leader"), ("branch", "s1_branch"),
-                      ("business_unit", "s1_business_unit")]:
-            put(k, st.text_input(T(lk), value=str(get(k, ""))))
-    with c2:
-        for k, lk in [("country_org", "s1_country_org"), ("country", "s1_country"),
-                      ("sector", "s1_sector")]:
-            put(k, st.text_input(T(lk), value=str(get(k, ""))))
-        put("data_period", str(st.date_input(T("s1_date"))))
-    nav(0)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 2 — BRANCH BASIC DATA
-# ─────────────────────────────────────────────────────────────────────────────
-def step2():
-    st.header(f"⚙️  {T('s2_title')}")
-    prog(1)
-    st.markdown("---")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        put("working_days",       st.number_input(T("s2_working_days"),       value=float(get("working_days", 272)),   min_value=1.0,   max_value=365.0, step=1.0))
-        put("interest_rate",      st.number_input(T("s2_interest_rate"),      value=float(get("interest_rate", 9.0)),  min_value=0.0,   max_value=50.0,  step=0.1,  format="%.2f"))
-        put("target_margin",      st.number_input(T("s2_target_margin"),      value=float(get("target_margin", 20.0)), min_value=0.0,   max_value=100.0, step=0.5,  format="%.1f"))
-        put("contract_years",     st.number_input(T("s2_contract_years"),     value=float(get("contract_years", 3)),   min_value=1.0,   max_value=20.0,  step=1.0))
-    with c2:
-        put("wms",                st.text_input(T("s2_wms"),   value=str(get("wms", "MIKADO"))))
-        put("wms_alloc",          st.number_input(T("s2_wms_alloc"),          value=float(get("wms_alloc", 1.7)),      min_value=0.0,   max_value=10.0,  step=0.1,  format="%.2f"))
-        put("fluctuation",        st.number_input(T("s2_fluctuation"),        value=float(get("fluctuation", 0.0)),    min_value=0.0,   max_value=50.0,  step=0.1,  format="%.1f"))
-        put("deduction_reserve",  st.number_input(T("s2_deduction_reserve"),  value=float(get("deduction_reserve", 10.0)), min_value=0.0, max_value=50.0, step=0.5))
-        put("failure_rate",       st.number_input(T("s2_failure_rate"),       value=float(get("failure_rate", 5.0)),   min_value=0.0,   max_value=50.0,  step=0.5))
-    with c3:
-        put("exchange_rate",      st.number_input(T("s2_exchange_rate"),      value=float(get("exchange_rate", 0.094)),min_value=0.001, max_value=1.0,   step=0.001,format="%.4f"))
-        put("ho_alloc",           st.number_input(T("s2_ho_alloc"),           value=float(get("ho_alloc", 0.8625)),    min_value=0.0,   max_value=5.0,   step=0.01, format="%.4f"))
-        put("term_payment",       st.number_input(T("s2_term_payment"),       value=float(get("term_payment", 30)),    min_value=0.0,   max_value=180.0, step=1.0))
-        put("domino_alloc",       st.number_input(T("s2_domino_alloc"),       value=float(get("domino_alloc", 1.7)),   min_value=0.0,   max_value=10.0,  step=0.1,  format="%.2f"))
-        put("premium_order",      st.number_input(T("s2_premium_order"),      value=float(get("premium_order", 0.15)), min_value=0.0,   max_value=10.0,  step=0.01, format="%.2f"))
-    nav(1)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 3 — WAREHOUSE
-# ─────────────────────────────────────────────────────────────────────────────
-def step3():
-    st.header(f"🏭  {T('s3_title')}")
-    prog(2)
-    st.markdown("---")
-    r = float(get("interest_rate", 9.0))
-    fx = float(get("exchange_rate", 0.094))
-
-    st.subheader("📐 Dimensions")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        surf = st.number_input(T("s3_wh_surface"), value=float(get("wh_surface", 1600)), min_value=0.0, step=10.0); put("wh_surface", surf)
-        h    = st.number_input(T("s3_wh_height"),  value=float(get("wh_height", 10.0)),  min_value=0.0, step=0.5, format="%.1f"); put("wh_height", h)
-    with c2:
-        gross = st.number_input(T("s3_gross_loc"),   value=float(get("gross_loc", 1741)), min_value=0.0, step=1.0); put("gross_loc", gross)
-        ded_z = st.number_input(T("s3_ded_zone"),    value=float(get("ded_zone", 0)),     min_value=0.0, step=1.0); put("ded_zone", ded_z)
-        ded_u = st.number_input(T("s3_ded_unusable"),value=float(get("ded_unusable", 0)), min_value=0.0, step=1.0); put("ded_unusable", ded_u)
-    with c3:
-        op_res = st.number_input(T("s3_op_reserve"), value=float(get("op_reserve", 10.0)), min_value=0.0, max_value=50.0, step=0.5); put("op_reserve", op_res)
-        net = calc_net_locations(gross, ded_z, ded_u, op_res); put("net_loc", net)
-        st.metric(T("s3_net_loc"), f"{net:,} PPL")
-        st.metric("Volume (m³)", f"{surf * h:,.0f} m³")
-
-    st.subheader(f"💰 {T('s3_rent_mad')} / Loyer")
-    c4, c5, c6 = st.columns(3)
-    with c4:
-        loyer   = st.number_input(T("s3_rent_mad"),  value=float(get("rent_mad", 44.5)),     min_value=0.0, step=0.5,  format="%.2f"); put("rent_mad", loyer)
-        charges = st.number_input(T("s3_charges"),   value=float(get("charges_mad", 3.5)),   min_value=0.0, step=0.1,  format="%.2f"); put("charges_mad", charges)
-        idilite = st.number_input(T("s3_idilite"),   value=float(get("idilite_mad", 5.04)),  min_value=0.0, step=0.01, format="%.3f"); put("idilite_mad", idilite)
-    with c5:
-        total_mad = loyer + charges + idilite; put("total_rent_mad", total_mad)
-        st.metric(T("s3_total_rent_mad"), f"{total_mad:.3f} MAD/m²/mois")
-        total_eur = total_mad * fx; put("total_rent_eur", total_eur)
-        disp_rent = total_eur if st.session_state.currency == "EUR" else total_eur / fx
-        st.metric(T("s3_total_rent_eur"), f"{to_display(total_eur):.4f} {cur_symbol()}/m²/mois")
-    with c6:
-        st.metric(T("annual_rent"), fmt_period(surf * total_eur * 12))
-        st.metric("Office rent (100m²)", fmt_period(100 * total_eur * 12))
-
-    st.subheader(f"🔧 Investments")
-    c7, c8, c9 = st.columns(3)
-    with c7:
-        r_ppl  = from_display(st.number_input(cur_label(T("s3_racking_ppl")),   value=to_display(float(get("racking_ppl", 35.0))), min_value=0.0, step=max(0.1, round(cur_rate(),1)))); put("racking_ppl", r_ppl)
-        r_qty  = st.number_input(T("s3_racking_qty"),   value=float(get("racking_qty", 1741)), min_value=0.0, step=1.0); put("racking_qty", r_qty)
-        sec    = from_display(st.number_input(cur_label(T("s3_security")),       value=to_display(float(get("security_eur_m2", 5.0))), min_value=0.0, step=max(0.1, round(cur_rate(),1)))); put("security_eur_m2", sec)
-        cab    = from_display(st.number_input(cur_label(T("s3_cabling")),        value=to_display(float(get("cabling_eur_m2", 5.0))),  min_value=0.0, step=max(0.1, round(cur_rate(),1)))); put("cabling_eur_m2", cab)
-    with c8:
-        ls_q   = st.number_input(T("s3_lower_shelf_qty"),  value=float(get("lower_shelf_qty", 110)),  min_value=0.0, step=1.0); put("lower_shelf_qty", ls_q)
-        ls_p   = from_display(st.number_input(cur_label(T("s3_lower_shelf_price")), value=to_display(float(get("lower_shelf_price", 38.0))), min_value=0.0, step=max(0.5, round(cur_rate(),0)))); put("lower_shelf_price", ls_p)
-        gr_q   = st.number_input(T("s3_grating_qty"),   value=float(get("grating_qty", 550)),   min_value=0.0, step=1.0); put("grating_qty", gr_q)
-        gr_p   = from_display(st.number_input(cur_label(T("s3_grating_price")), value=to_display(float(get("grating_price", 20.0))), min_value=0.0, step=max(0.5, round(cur_rate(),0)))); put("grating_price", gr_p)
-    with c9:
-        dy     = st.number_input(T("s3_invest_depr_years"), value=float(get("invest_depr_years", 12)), min_value=1.0, max_value=30.0, step=1.0); put("invest_depr_years", dy)
-        pk     = st.number_input(T("s3_peak_pal"), value=float(get("peak_pal", 2413)), min_value=0.0, step=10.0); put("peak_pal", pk)
-        av     = st.number_input(T("s3_avg_pal"),  value=float(get("avg_pal", 1772)),  min_value=0.0, step=10.0); put("avg_pal", av)
-
-    wh = calc_warehouse_costs(st.session_state.d); put("wh_detail", wh); put("wh_total", wh["total"])
-    st.markdown("---")
-    st.subheader(f"📊 {T('total')} — {T('cost_wh')}  *({period_label()} · {cur_symbol()})*")
-    m1, m2, m3, m4, m5 = st.columns(5)
-    m1.metric("🏗 " + T("annual_rent"),         fmt_period(wh['rent']))
-    m2.metric("📦 " + T("racking"),             fmt_period(wh['racking']))
-    m3.metric("🔐 " + T("security_cabling"),    fmt_period(wh['security'] + wh['cabling']))
-    m4.metric("🏠 Office+Equip",                fmt_period(wh['office']))
-    m5.metric(f"📋 {T('total')}",               fmt_period(wh['total']))
-    nav(2)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 4 — PERSONNEL
-# ─────────────────────────────────────────────────────────────────────────────
-def step4():
-    st.header(f"👷  {T('s4_title')}")
-    prog(3)
-    st.markdown("---")
-    lang = st.session_state.lang
-    sc = st.number_input(T("social_charges"), value=float(get("social_charges_pct", AKZO["social_charges_pct"])), min_value=0.0, max_value=100.0, step=0.1, format="%.1f")
-    put("social_charges_pct", sc)
-
-    # ─ OPERATIVES ─
-    st.subheader(f"🔵 {T('s4_op_title')}")
-    if "personnel_op" not in st.session_state.d:
-        st.session_state.d["personnel_op"] = [dict(p) for p in AKZO_PERSONNEL_OP]
-
-    cols_h = st.columns([3, 1.2, 1.8, 1.2, 1.2, 1.5, 1.5])
-    for c, lbl in zip(cols_h, [T("s4_role"), T("s4_qty"), cur_label(T("s4_salary")), T("s4_illness"), T("s4_holidays"), T("s4_weekly_h"), T("s4_allowance")]):
-        c.markdown(f"**{lbl}**")
-
-    total_op_var = 0
-    for i, p in enumerate(st.session_state.d["personnel_op"]):
-        cols = st.columns([3, 1.2, 1.8, 1.2, 1.2, 1.5, 1.5])
-        cols[0].markdown(f"*{p['role_fr'] if lang == 'FR' else p['role_en']}*")
-        p["qty"]       = cols[1].number_input("", value=float(p.get("qty", 0)),        key=f"op_q_{i}",  min_value=0.0, max_value=20.0, step=0.5,    label_visibility="collapsed")
-        sal_disp = to_display(float(p.get("salary", 0))); new_sal = cols[2].number_input("", value=sal_disp, key=f"op_s_{i}", min_value=0.0, step=round(cur_rate()*100,0) or 100.0, label_visibility="collapsed"); p["salary"] = from_display(new_sal)
-        p["illness"]   = cols[3].number_input("", value=float(p.get("illness", 4.97)), key=f"op_il_{i}", min_value=0.0, max_value=50.0, step=0.1,  format="%.2f", label_visibility="collapsed")
-        p["holidays"]  = cols[4].number_input("", value=float(p.get("holidays", 25)),  key=f"op_h_{i}",  min_value=0.0, max_value=50.0, step=1.0,    label_visibility="collapsed")
-        p["weekly_h"]  = cols[5].number_input("", value=float(p.get("weekly_h", 44)),  key=f"op_w_{i}",  min_value=0.0, max_value=60.0, step=1.0,    label_visibility="collapsed")
-        p["allowance"] = cols[6].number_input("", value=float(p.get("allowance", 9.0)),key=f"op_a_{i}",  min_value=0.0, max_value=50.0, step=0.5,    label_visibility="collapsed")
-        if p["qty"] > 0 and p["salary"] > 0:
-            total_op_var += calc_personnel_annual(p["salary"], p["qty"], sc)
-
-    # ─ OFFICE ─
-    st.subheader(f"🟡 {T('s4_adm_title')}")
-    if "personnel_adm" not in st.session_state.d:
-        st.session_state.d["personnel_adm"] = [dict(p) for p in AKZO_PERSONNEL_ADM]
-
-    cols_h2 = st.columns([3, 1.2, 1.8, 1.2, 1.2, 1.5])
-    for c, lbl in zip(cols_h2, [T("s4_role"), T("s4_qty"), cur_label(T("s4_salary")), T("s4_illness"), T("s4_holidays"), T("s4_weekly_h")]):
-        c.markdown(f"**{lbl}**")
-
-    total_adm_fix = 0
-    for i, p in enumerate(st.session_state.d["personnel_adm"]):
-        cols = st.columns([3, 1.2, 1.8, 1.2, 1.2, 1.5])
-        cols[0].markdown(f"*{p['role_fr'] if lang == 'FR' else p['role_en']}*")
-        p["qty"]      = cols[1].number_input("", value=float(p.get("qty", 0)),        key=f"adm_q_{i}",  min_value=0.0, max_value=10.0, step=0.25,   label_visibility="collapsed")
-        sal_disp_adm = to_display(float(p.get("salary", 0))); new_sal_adm = cols[2].number_input("", value=sal_disp_adm, key=f"adm_s_{i}", min_value=0.0, step=max(1.0, round(cur_rate()*100, 0)), label_visibility="collapsed"); p["salary"] = from_display(new_sal_adm)
-        p["illness"]  = cols[3].number_input("", value=float(p.get("illness", 4.97)), key=f"adm_il_{i}", min_value=0.0, max_value=50.0, step=0.1, format="%.2f", label_visibility="collapsed")
-        p["holidays"] = cols[4].number_input("", value=float(p.get("holidays", 25)),  key=f"adm_h_{i}",  min_value=0.0, max_value=50.0, step=1.0,    label_visibility="collapsed")
-        p["weekly_h"] = cols[5].number_input("", value=float(p.get("weekly_h", 44)),  key=f"adm_w_{i}",  min_value=0.0, max_value=60.0, step=1.0,    label_visibility="collapsed")
-        if p["qty"] > 0 and p["salary"] > 0:
-            total_adm_fix += calc_personnel_annual(p["salary"], p["qty"], sc)
-
-    # ─ MANAGEMENT ─
-    st.subheader(f"🔴 {T('s4_mgmt_title')}")
-    if "personnel_mgmt" not in st.session_state.d:
-        st.session_state.d["personnel_mgmt"] = [dict(p) for p in AKZO_PERSONNEL_MGMT]
-
-    cols_h3 = st.columns([3, 1.5, 2])
-    for c, lbl in zip(cols_h3, [T("s4_role"), T("s4_qty"), cur_label(T("s4_salary"))]):
-        c.markdown(f"**{lbl}**")
-
-    total_mgmt_fix = 0
-    for i, p in enumerate(st.session_state.d["personnel_mgmt"]):
-        cols = st.columns([3, 1.5, 2])
-        cols[0].markdown(f"*{p['role_fr'] if lang == 'FR' else p['role_en']}*")
-        p["qty"]    = cols[1].number_input("", value=float(p.get("qty", 0)),    key=f"mgmt_q_{i}", min_value=0.0, max_value=5.0, step=0.05, format="%.2f", label_visibility="collapsed")
-        sal_disp_mgmt = to_display(float(p.get("salary", 0))); new_sal_mgmt = cols[2].number_input("", value=sal_disp_mgmt, key=f"mgmt_s_{i}", min_value=0.0, step=max(1.0, round(cur_rate()*100, 0)), label_visibility="collapsed"); p["salary"] = from_display(new_sal_mgmt)
-        if p["qty"] > 0 and p["salary"] > 0:
-            total_mgmt_fix += calc_personnel_annual(p["salary"], p["qty"], sc)
-
-    total_var = total_op_var
-    total_fix = total_adm_fix + total_mgmt_fix
-    total_pers = total_var + total_fix
-    total_fte = (
-        sum(p.get("qty", 0) for p in st.session_state.d["personnel_op"]) +
-        sum(p.get("qty", 0) for p in st.session_state.d["personnel_adm"]) +
-        sum(p.get("qty", 0) for p in st.session_state.d["personnel_mgmt"])
-    )
-    put("personnel_var", total_var); put("personnel_fix", total_fix)
-    put("personnel_total", total_pers); put("personnel_fte", total_fte)
-
-    st.markdown("---")
-    pc1, pc2, pc3, pc4 = st.columns(4)
-    pc1.metric("👥 Total FTE", f"{total_fte:.2f}")
-    pc2.metric(T("variable_costs") + f" ({period_label()})", fmt_period(total_var))
-    pc3.metric(T("fixed_costs") + f" ({period_label()})",    fmt_period(total_fix))
-    pc4.metric(f"💰 {T('total')} ({period_label()})",        fmt_period(total_pers))
-    nav(3)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 5 — INDUSTRIAL TRUCKS
-# ─────────────────────────────────────────────────────────────────────────────
-def step5():
-    st.header(f"🚜  {T('s5_title')}")
-    prog(4)
-    st.markdown("---")
-    lang = st.session_state.lang
-    r = float(get("interest_rate", 9.0))
-
-    if "trucks" not in st.session_state.d:
-        st.session_state.d["trucks"] = [dict(t) for t in AKZO_TRUCKS]
-
-    # Header row
-    hc = st.columns([3.5, 0.8, 1.8, 1.8, 1.5, 1.2, 1.8])
-    sym = cur_symbol()
-    for c, lbl in zip(hc, [T("s5_truck"), T("s5_qty"), T("s5_rent_purchase"),
-                            f"{T('s5_price')} ({sym})", f"{T('s5_battery')} ({sym})",
-                            T("s5_depr_years"), f"Annual Cost ({sym})"]):
-        c.markdown(f"**{lbl}**")
-
-    total_trucks = 0
-    for i, tk in enumerate(st.session_state.d["trucks"]):
-        name = tk["name_fr"] if lang == "FR" else tk["name_en"]
-        cols = st.columns([3.5, 0.8, 1.8, 1.8, 1.5, 1.2, 1.8])
-        cols[0].markdown(f"*{name}* `{tk['code']}`")
-        tk["qty"]           = cols[1].number_input("", value=float(tk.get("qty", 0)),          key=f"tk_q_{i}",  min_value=0.0, max_value=20.0, step=0.5,    label_visibility="collapsed")
-        tk["rent_purchase"] = cols[2].selectbox("",   ["External Rent", "Purchase"],            key=f"tk_rp_{i}", index=0 if tk.get("rent_purchase") == "External Rent" else 1, label_visibility="collapsed")
-        tk["price"]         = from_display(cols[3].number_input("", value=to_display(float(tk.get("price", 0))),   key=f"tk_pr_{i}", min_value=0.0, step=max(1.0, round(cur_rate()*100,0)), label_visibility="collapsed"))
-        tk["battery"]       = from_display(cols[4].number_input("", value=to_display(float(tk.get("battery", 0))), key=f"tk_ba_{i}", min_value=0.0, step=max(1.0, round(cur_rate()*100,0)), label_visibility="collapsed"))
-        tk["depr_years"]    = cols[5].number_input("", value=float(tk.get("depr_years", 6)),    key=f"tk_dy_{i}", min_value=1.0, max_value=20.0, step=1.0,    label_visibility="collapsed")
-        annual = calc_truck_annual(tk["price"], tk["battery"], tk["qty"], tk["rent_purchase"], tk["depr_years"], r)
-        tk["annual_cost"] = annual
-        cols[6].markdown(f"**{fmt_period(annual)}**" if tk["qty"] > 0 else "—")
-        total_trucks += annual
-
-    put("trucks_total", total_trucks)
-    st.markdown("---")
-    st.metric(f"🚜 {T('s5_title')} — {T('total')} ({period_label()})", fmt_period(total_trucks))
-    nav(4)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 6 — PROCESSES & VOLUMES
-# ─────────────────────────────────────────────────────────────────────────────
-def step6():
-    st.header(f"⚡  {T('s6_title')}")
-    prog(5)
-    st.markdown("---")
-    lang = st.session_state.lang
-    wd = float(get("working_days", 272))
-
-    if "processes" not in st.session_state.d:
-        st.session_state.d["processes"] = [dict(p) for p in AKZO_PROCESSES]
-
-    groups = [
-        ("inbound",    f"📥 {T('s6_inbound_title')}"),
-        ("picking",    f"🎯 {T('s6_picking_title')}"),
-        ("relocation", f"🔄 {T('s6_relocation_title')}"),
-        ("outbound",   f"📤 {T('s6_outbound_title')}"),
-        ("loading",    f"🚛 {T('s6_loading_title')}"),
+# ══════════════════════════════════════════════════════════════════════════════
+def _init():
+    if "mup_ready" in st.session_state:
+        return
+    st.session_state.mup_ready = True
+    st.session_state.step    = 0
+    st.session_state.lang    = "FR"
+    st.session_state.cur     = "EUR"   # EUR | MAD
+    st.session_state.period  = "ANN"   # ANN | MON
+    for k, v in _D.items():
+        st.session_state[k] = v
+    st.session_state.personnel = [
+        {"en":r[0],"fr":r[1],"qty":r[2],"salary":r[3],"cat":r[4]} for r in _PERSONNEL
     ]
-
-    for grp_code, grp_label in groups:
-        st.subheader(grp_label)
-        hc = st.columns([0.6, 3.8, 1.5, 2.5, 1.5, 1.5, 1.2])
-        for c, lb in zip(hc, [T("s6_active"), T("s6_process"), T("s6_volume"), T("s6_unit"), T("s6_pg"), T("s6_pn"), "h/day"]):
-            c.markdown(f"**{lb}**")
-
-        for i, proc in enumerate(st.session_state.d["processes"]):
-            if proc["group"] != grp_code:
-                continue
-            pk = f"{grp_code}_{i}"
-            name = proc["name_fr"] if lang == "FR" else proc["name_en"]
-            unit = proc["unit_fr"] if lang == "FR" else proc["unit_en"]
-            cols = st.columns([0.6, 3.8, 1.5, 2.5, 1.5, 1.5, 1.2])
-            proc["active"] = cols[0].checkbox("", value=proc.get("active", True), key=f"p_a_{pk}", label_visibility="collapsed")
-            cols[1].markdown(f"*{name}*")
-            if proc["active"]:
-                proc["volume"]     = cols[2].number_input("", value=float(proc.get("volume", 0)),     key=f"p_v_{pk}",  min_value=0.0, step=100.0, label_visibility="collapsed")
-                cols[3].markdown(f"*{unit}*")
-                proc["prod_gross"] = cols[4].number_input("", value=float(proc.get("prod_gross", 0)), key=f"p_pg_{pk}", min_value=0.1, step=0.5, format="%.2f", label_visibility="collapsed")
-                proc["prod_net"]   = cols[5].number_input("", value=float(proc.get("prod_net", 0)),   key=f"p_pn_{pk}", min_value=0.1, step=0.5, format="%.2f", label_visibility="collapsed")
-                h_day = (proc["volume"] / wd) / proc["prod_net"] if wd > 0 and proc["prod_net"] > 0 else 0
-                cols[6].markdown(f"**{h_day:.2f}**")
-            else:
-                for c in cols[2:]: c.markdown("—")
-
-    st.subheader(f"🏬 {T('s6_storage_title')}")
-    s1, s2 = st.columns(2)
-    s1.metric(T("avg_storage"),   f"{get('avg_pal', 1772):,.0f} PPL")
-    s2.metric(T("net_locations"), f"{get('net_loc', 1567):,.0f} PPL")
-    nav(5)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 7 — PRICE SHEET
-# ─────────────────────────────────────────────────────────────────────────────
-def step7():
-    st.header(f"💶  {T('s7_title')}")
-    prog(6)
-    st.markdown("---")
-    lang = st.session_state.lang
-    net_loc = int(get("net_loc", 1567))
-    target  = float(get("target_margin", 20.0)) / 100
-
-    if "prices" not in st.session_state.d:
-        st.session_state.d["prices"] = [dict(p) for p in AKZO_PRICES]
-
-    # Volume map from processes
-    vol_map = {proc["code"]: proc.get("volume", 0)
-               for proc in st.session_state.d.get("processes", AKZO_PROCESSES)
-               if proc.get("active", True)}
-
-    st.markdown(f"*{T('net_locations')} : **{net_loc:,} PPL***")
-
-    # Header
-    hc = st.columns([3, 2, 1.5, 1.8, 1.8, 1.8, 1.5])
-    sym = cur_symbol()
-    pl  = period_label()
-    for c, lb in zip(hc, [T("s7_process"), T("s7_unit"), T("s7_volume"),
-                          f"{T('s7_price')} ({sym})", f"{T('s7_ca')} ({pl} · {sym})",
-                          f"{T('s7_cost')} ({pl} · {sym})", T("s7_margin")]):
-        c.markdown(f"**{lb}**")
-
-    total_ca = 0; total_cost = 0
-    for i, p in enumerate(st.session_state.d["prices"]):
-        code = p["code"]
-        name = p["name_fr"] if lang == "FR" else p["name_en"]
-        unit = p["billing_fr"] if lang == "FR" else p["billing_en"]
-
-        # Determine volume display and volume for calculation
-        if code == "storage":
-            vol = net_loc; vol_disp = f"{net_loc:,} × 12"
-        elif code == "fixed":
-            vol = 12; vol_disp = "12"
-        else:
-            vol = vol_map.get(code, 0); vol_disp = f"{vol:,.0f}"
-
-        cols = st.columns([3, 2, 1.5, 1.8, 1.8, 1.8, 1.5])
-        cols[0].markdown(f"*{name}*")
-        cols[1].markdown(f"*{unit}*")
-        cols[2].markdown(f"{vol_disp}")
-
-        # Price input: show in display currency, store in EUR
-        price_eur = float(p.get("price", 0))
-        price_display = to_display(price_eur)
-        new_price_display = cols[3].number_input("", value=price_display, key=f"pr_{i}",
-                                                 min_value=0.0, step=0.0001 if st.session_state.currency == "EUR" else 0.001,
-                                                 format="%.4f" if st.session_state.currency == "EUR" else "%.3f",
-                                                 label_visibility="collapsed")
-        # Convert back to EUR for storage
-        p["price"] = from_display(new_price_display)
-
-        # CA
-        if code == "storage":
-            ca = p["price"] * net_loc * 12
-            cost = p.get("cost_unit", 6.064) * net_loc * 12
-        elif code == "fixed":
-            ca = p["price"] * 12
-            cost = p.get("cost_unit", 4983) * 12
-        else:
-            ca = p["price"] * vol
-            cost = p.get("cost_unit", p["price"] * 0.8) * vol
-
-        profit = ca - cost
-        margin = profit / ca * 100 if ca > 0 else 0
-
-        cols[4].markdown(f"**{fmt_period(ca)}**")
-        cols[5].markdown(f"{fmt_period(cost)}")
-        color = "green" if margin > 0 else "red"
-        cols[6].markdown(f":{color}[**{margin:.1f}%**]")
-
-        p["ca"] = ca; p["cost"] = cost
-        total_ca += ca; total_cost += cost
-
-    # Allocations
-    wms_pct = float(get("wms_alloc", 1.7)) / 100
-    ho_pct  = float(get("ho_alloc", 0.8625)) / 100
-    wms_cost = total_ca * wms_pct
-    ho_cost  = total_ca * ho_pct
-
-    put("total_ca", total_ca); put("wms_cost", wms_cost); put("ho_cost", ho_cost)
-
-    st.markdown("---")
-    rc1, rc2, rc3, rc4 = st.columns(4)
-    rc1.metric(f"CA {pl}" if lang == "FR" else f"Turnover {pl}", fmt_period(total_ca))
-    rc2.metric("Coûts Processus" if lang == "FR" else "Process Costs", fmt_period(total_cost))
-    rc3.metric("WMS + HO", fmt_period(wms_cost + ho_cost))
-    ind_profit = total_ca - total_cost - wms_cost - ho_cost
-    ind_margin = ind_profit / total_ca * 100 if total_ca > 0 else 0
-    rc4.metric("Marge Indicative" if lang == "FR" else "Indicative Margin", f"{ind_margin:.1f}%",
-               delta=f"{ind_margin - float(get('target_margin', 20)):.1f}% vs cible")
-    nav(6)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 8 — RESULTS
-# ─────────────────────────────────────────────────────────────────────────────
-def step8():
-    st.header(f"📊  {T('s8_title')}")
-    prog(7)
-    st.markdown("---")
-    lang = st.session_state.lang
-    d = st.session_state.d
-
-    target    = float(get("target_margin", 20.0))
-    total_ca  = d.get("total_ca", 0)
-    wh_total  = d.get("wh_total", 0)
-    per_total = d.get("personnel_total", 0)
-    tr_total  = d.get("trucks_total", 0)
-    wms_cost  = d.get("wms_cost", total_ca * float(get("wms_alloc", 1.7)) / 100)
-    ho_cost   = d.get("ho_cost", total_ca * float(get("ho_alloc", 0.8625)) / 100)
-
-    total_costs = wh_total + per_total + tr_total + wms_cost + ho_cost
-    profit      = total_ca - total_costs
-    margin      = profit / total_ca * 100 if total_ca > 0 else 0
-    gap         = margin - target
-
-    # ── KPIs ──
-    pl = period_label()
-    st.subheader("🎯 " + ("Key Metrics" if lang == "EN" else "Indicateurs Clés") + f"  *— {pl} · {cur_symbol()}*")
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric(T("s8_ca"),     fmt_period(total_ca))
-    k2.metric(T("s8_cost"),   fmt_period(total_costs))
-    k3.metric(T("s8_profit"), fmt_period(profit))
-    k4.metric(T("s8_margin"), f"{margin:.2f}%", delta=f"{gap:+.2f}% vs {target:.1f}%",
-              delta_color="normal" if gap >= 0 else "inverse")
-
-    if margin >= target:
-        st.success(f"✅ {'Margin' if lang == 'EN' else 'Marge'} {margin:.2f}% ≥ {'Target' if lang == 'EN' else 'Cible'} {target:.1f}%")
-    else:
-        st.error(f"❌ {'Margin' if lang == 'EN' else 'Marge'} {margin:.2f}% < {'Target' if lang == 'EN' else 'Cible'} {target:.1f}%")
-
-    # ── Cost Breakdown ──
-    st.subheader("💰 " + T("cost_breakdown") + f"  *({pl} · {cur_symbol()})*")
-    items = [
-        (T("cost_wh"),    wh_total,  "🏭"),
-        (T("cost_pers"),  per_total, "👷"),
-        (T("cost_trucks"),tr_total,  "🚜"),
-        ("WMS",           wms_cost,  "💻"),
-        ("HO Alloc",      ho_cost,   "🏢"),
+    st.session_state.trucks = [
+        {"code":r[0],"en":r[1],"fr":r[2],"qty":r[3],
+         "mode":r[4],"price":r[5],"depr_years":r[6]} for r in _TRUCKS
     ]
-    bc = st.columns(len(items))
-    for c, (label, val, icon) in zip(bc, items):
-        pct_cost = val / total_costs * 100 if total_costs > 0 else 0
-        pct_ca   = val / total_ca * 100 if total_ca > 0 else 0
-        c.metric(f"{icon} {label}", fmt_period(val), delta=f"{pct_ca:.1f}% CA")
+    st.session_state.processes = [
+        {"code":r[0],"en":r[1],"fr":r[2],"group":r[3],
+         "b_en":r[4],"b_fr":r[5],"active":True,
+         "volume":r[6],"prod_gross":r[7],"prod_net":r[8],
+         "cost_unit":r[9],"price":r[10]} for r in _PROCESSES
+    ]
+    st.session_state.price_storage   = 7.64
+    st.session_state.cost_storage    = 6.064
+    st.session_state.price_fixed     = 6228.92
+    st.session_state.cost_fixed      = 4983.14
 
-    # ── Revenue Breakdown ──
-    st.subheader("📈 " + T("revenue_breakdown") + f"  *({pl} · {cur_symbol()})*")
+_init()
+
+s   = st.session_state
+L   = lambda fr, en: fr if s.lang == "FR" else en
+SYM = lambda: "MAD" if s.cur == "MAD" else "€"
+FX  = lambda: s.exchange_rate    # 1 MAD = FX €  →  1 € = 1/FX MAD
+PDV = lambda: 12 if s.period == "MON" else 1
+PL  = lambda: L("Mensuel","Monthly") if s.period == "MON" else L("Annuel","Annual")
+
+def to_cur(eur):
+    return eur / FX() if s.cur == "MAD" and FX() > 0 else eur
+def from_cur(v):
+    return v * FX() if s.cur == "MAD" else v
+def fmt(eur_annual, dec=0):
+    v = to_cur(eur_annual) / PDV()
+    return f"{v:,.{dec}f} {SYM()}" if dec else f"{v:,.0f} {SYM()}"
+def fmt_u(eur, dec=4):
+    v = to_cur(eur)
+    return f"{v:,.{dec}f} {SYM()}"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ENGINE
+# ══════════════════════════════════════════════════════════════════════════════
+def net_loc():
+    return round(s.gross_loc * (1 - s.op_reserve_pct / 100))
+
+def inv_annual(total, r_pct, years, maint_pct=1.0):
+    if total <= 0 or years <= 0: return 0
+    r = r_pct / 100
+    return total / years + total * r * (years + 1) / (2 * years) + total * maint_pct / 100
+
+def calc_wh():
+    surf = s.wh_surface
+    rent_eur_m2 = (s.rent_mad + s.charges_mad + s.taxes_mad) * s.exchange_rate
+    r, dy = s.interest_rate, s.invest_years
+    return {
+        "rent":     surf * rent_eur_m2 * 12,
+        "office":   100  * rent_eur_m2 * 12 + inv_annual(1.85*1364, r, 12, 1),
+        "racking":  inv_annual(s.racking_ppl * s.racking_qty, r, dy, 1),
+        "security": inv_annual(s.security_m2 * surf,  r, 5, 1),
+        "cabling":  inv_annual(s.cabling_m2  * surf,  r, 5, 1),
+        "shelves":  inv_annual(s.lower_shelf_qty * s.lower_shelf_price, r, dy, 1),
+        "grating":  inv_annual(s.grating_qty * s.grating_price, r, dy, 1),
+    }
+
+def calc_pers():
+    sc = s.social_pct / 100
+    var = fix = fte = 0.0
+    for p in s.personnel:
+        q = p["qty"]
+        if q <= 0: continue
+        cost = p["salary"] * q * (1 + sc)
+        fte += q
+        if p["cat"] == "OP": var += cost
+        else:                 fix += cost
+    return {"var": var, "fix": fix, "total": var + fix, "fte": fte}
+
+def calc_trucks_total():
+    total = 0.0
+    for tk in s.trucks:
+        if tk["qty"] > 0:
+            total += inv_annual(tk["price"] * tk["qty"], s.interest_rate, tk["depr_years"], 2.0)
+    return total
+
+def calc_ps():
+    nl = net_loc()
     lines = []
-    for p in d.get("prices", AKZO_PRICES):
-        ca_v = p.get("ca", 0)
-        if ca_v > 0:
-            name = p.get("name_fr" if lang == "FR" else "name_en", p.get("name_en", ""))
-            pct  = ca_v / total_ca * 100 if total_ca > 0 else 0
-            lines.append((name, ca_v, pct))
-    lines.sort(key=lambda x: x[1], reverse=True)
-    r_cols = st.columns([3, 2, 1])
-    r_cols[0].markdown("**Ligne / Line**")
-    r_cols[1].markdown(f"**CA ({pl} · {cur_symbol()})**")
-    r_cols[2].markdown("**%**")
-    for name, ca_v, pct in lines:
-        rc = st.columns([3, 2, 1])
-        rc[0].markdown(f"*{name}*"); rc[1].markdown(fmt_period(ca_v)); rc[2].markdown(f"{pct:.1f}%")
+    total_ca = total_cost = 0.0
+    # Storage
+    ca_s = s.price_storage * nl * 12; co_s = s.cost_storage * nl * 12
+    lines.append({"name": L("Stockage","Storage"), "vol": nl*12, "price": s.price_storage,
+                  "cost_u": s.cost_storage, "ca": ca_s, "cost": co_s})
+    # Fixed
+    ca_f = s.price_fixed * 12; co_f = s.cost_fixed * 12
+    lines.append({"name": L("Forfait fixe","Fixed Lump Sum"), "vol": 12, "price": s.price_fixed,
+                  "cost_u": s.cost_fixed, "ca": ca_f, "cost": co_f})
+    total_ca += ca_s + ca_f; total_cost += co_s + co_f
+    # Processes
+    for p in s.processes:
+        if not p["active"]: continue
+        ca = p["price"] * p["volume"]; co = p["cost_unit"] * p["volume"]
+        lines.append({"code": p["code"],
+                      "name": p["fr"] if s.lang=="FR" else p["en"],
+                      "unit": p["b_fr"] if s.lang=="FR" else p["b_en"],
+                      "vol": p["volume"], "price": p["price"],
+                      "cost_u": p["cost_unit"], "ca": ca, "cost": co})
+        total_ca += ca; total_cost += co
+    wms_c = total_ca * s.wms_alloc_pct / 100
+    ho_c  = total_ca * s.ho_alloc_pct  / 100
+    total_cost_all = total_cost + wms_c + ho_c
+    profit = total_ca - total_cost_all
+    margin = profit / total_ca * 100 if total_ca > 0 else 0
+    return {"lines": lines, "total_ca": total_ca, "total_cost_proc": total_cost,
+            "wms": wms_c, "ho": ho_c, "total_cost": total_cost_all,
+            "profit": profit, "margin": margin}
 
-    # ── Cost per m² and per location ──
-    st.subheader("🔢 " + ("Efficiency Ratios" if lang == "EN" else "Ratios d'Efficacité"))
-    surf = float(get("wh_surface", 1600)); net_loc = float(get("net_loc", 1567))
-    rat1, rat2, rat3, rat4 = st.columns(4)
-    rat1.metric("CA/m²",          fmt_period(total_ca / surf) if surf > 0 else "—")
-    rat2.metric("CA/emplacement" if lang == "FR" else "CA/location", fmt_period(total_ca / net_loc) if net_loc > 0 else "—")
-    rat3.metric("Coût/m²" if lang == "FR" else "Cost/m²", fmt_period(total_costs / surf) if surf > 0 else "—")
-    rat4.metric("Profit/FTE",     fmt_period(profit / float(get('personnel_fte', 4.85))) if get("personnel_fte", 4.85) > 0 else "—")
+def calc_all():
+    wh = calc_wh(); wh["total"] = sum(wh.values())
+    pe = calc_pers(); tk = calc_trucks_total(); ps = calc_ps()
+    return wh, pe, tk, ps
 
-    # ── Project Card ──
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STEP DEFINITIONS
+# ══════════════════════════════════════════════════════════════════════════════
+STEPS = [
+    L("Projet",         "Project"),
+    L("Paramètres",     "Parameters"),
+    L("Entrepôt",       "Warehouse"),
+    L("Personnel",      "Personnel"),
+    L("Engins",         "Trucks"),
+    L("Processus",      "Processes"),
+    L("Grille tarif.",  "Price Sheet"),
+    L("Résultats",      "Results"),
+]
+
+STEP_ICONS = ["📋","⚙️","🏭","👷","🚜","⚡","💶","📊"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LAYOUT — HEADER + KPI + WIZARD NAV
+# ══════════════════════════════════════════════════════════════════════════════
+wh_r, pe_r, tk_r, ps_r = calc_all()
+
+st.markdown(f"""
+<div class="mup-header">
+  <div class="mup-logo">📦 Polka <span>MUP</span>
+    <span style="font-size:.75rem;font-weight:400;color:#475569;margin-left:10px">Multi-User Pricing Tool</span>
+  </div>
+  <div class="mup-project">
+    <div class="name">{s.project} &nbsp;·&nbsp; {s.customer}</div>
+    <div class="sub">{s.branch} &nbsp;·&nbsp; {s.country} &nbsp;·&nbsp; {s.business_unit}</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+# Controls row — language, currency, period
+ctrl1, ctrl2, ctrl3, ctrl4 = st.columns([1.5, 2, 2.5, 3])
+with ctrl1:
+    lang_v = st.radio("", ["FR","EN"], horizontal=True, index=0 if s.lang=="FR" else 1, key="_l")
+    if lang_v != s.lang: s.lang = lang_v; st.rerun()
+with ctrl2:
+    cur_v = st.radio("", ["EUR (€)","MAD (درهم)"], horizontal=True, index=0 if s.cur=="EUR" else 1, key="_c")
+    new_c = "EUR" if cur_v.startswith("EUR") else "MAD"
+    if new_c != s.cur: s.cur = new_c; st.rerun()
+with ctrl3:
+    per_v = st.radio("", [L("Annuel","Annual"), L("Mensuel","Monthly")], horizontal=True, index=0 if s.period=="ANN" else 1, key="_p")
+    new_p = "ANN" if per_v in ("Annuel","Annual") else "MON"
+    if new_p != s.period: s.period = new_p; st.rerun()
+with ctrl4:
+    rate_info = f"1 € = {1/FX():.2f} MAD" if s.cur=="MAD" else f"1 MAD = {FX():.4f} €"
+    mc = "up" if ps_r["margin"] >= s.target_margin else "down"
+    st.caption(f"{rate_info}  ·  {L('Vue','View')}: **{PL()}**  ·  {L('Marge','Margin')}: **{ps_r['margin']:.1f}%** {'✅' if mc=='up' else '❌'}")
+
+# KPI Bar
+m_color = "up" if ps_r["margin"] >= s.target_margin else "down"
+st.markdown(f"""
+<div class="kpi-bar">
+  <div class="kpi-cell">
+    <div class="kpi-lbl">CA {PL()}</div>
+    <div class="kpi-val blue">{fmt(ps_r['total_ca'])}</div>
+    <div class="kpi-sub">Stockage: {fmt(ps_r['lines'][0]['ca'])}</div>
+  </div>
+  <div class="kpi-cell">
+    <div class="kpi-lbl">{L('Coûts','Costs')} {PL()}</div>
+    <div class="kpi-val">{fmt(ps_r['total_cost'])}</div>
+    <div class="kpi-sub">WH+Pers+Engins: {fmt(wh_r['total']+pe_r['total']+tk_r)}</div>
+  </div>
+  <div class="kpi-cell">
+    <div class="kpi-lbl">{L('Profit','Profit')} {PL()}</div>
+    <div class="kpi-val {m_color}">{fmt(ps_r['profit'])}</div>
+    <div class="kpi-sub">{L('Cible','Target')}: {fmt(ps_r['total_ca']*s.target_margin/100)}</div>
+  </div>
+  <div class="kpi-cell">
+    <div class="kpi-lbl">{L('Marge réelle','Actual Margin')}</div>
+    <div class="kpi-val {m_color}">{ps_r['margin']:.2f}%</div>
+    <div class="kpi-sub">{L('Cible','Target')} {s.target_margin:.1f}% {'✅' if ps_r['margin']>=s.target_margin else '❌'}</div>
+  </div>
+  <div class="kpi-cell">
+    <div class="kpi-lbl">{L('Emplacements nets','Net Locations')} · FTE</div>
+    <div class="kpi-val">{net_loc():,}</div>
+    <div class="kpi-sub">{L('sur','of')} {s.gross_loc:.0f} {L('bruts','gross')} · {pe_r['fte']:.2f} FTE</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+# Progress bar
+segs = "".join([
+    f'<div class="prog-seg {"done" if i < s.step else "active" if i == s.step else ""}"></div>'
+    for i in range(len(STEPS))
+])
+st.markdown(f'<div class="prog-arrow">{segs}</div>', unsafe_allow_html=True)
+
+# Step wizard nav
+step_html = ""
+for i, (icon, label) in enumerate(zip(STEP_ICONS, STEPS)):
+    if i < s.step: cls = "wstep done"
+    elif i == s.step: cls = "wstep active"
+    else: cls = "wstep todo"
+    step_html += f'<div class="{cls}"><span class="dot"></span>{icon} {label}</div>'
+st.markdown(f'<div class="wizard-nav">{step_html}</div>', unsafe_allow_html=True)
+
+# Clickable step buttons (invisible overlay via columns trick)
+nav_cols = st.columns(len(STEPS))
+for i, col in enumerate(nav_cols):
+    with col:
+        if st.button("​", key=f"_snav_{i}", help=STEPS[i], use_container_width=True):  # zero-width space
+            s.step = i; st.rerun()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# HELPERS FOR STEPS
+# ══════════════════════════════════════════════════════════════════════════════
+def nav_btns(step_idx):
+    _, prev_col, _, next_col, _ = st.columns([3, 1, 2, 1, 3])
+    with prev_col:
+        if step_idx > 0:
+            if st.button(f"← {L('Retour','Back')}", use_container_width=True, key=f"prev_{step_idx}"):
+                s.step -= 1; st.rerun()
+    with next_col:
+        if step_idx < len(STEPS) - 1:
+            label = L("Suivant","Next") + " →"
+            if st.button(label, use_container_width=True, type="primary", key=f"next_{step_idx}"):
+                s.step += 1; st.rerun()
+
+def calc_block_html(label, formula, result, color="highlight"):
+    return f"""
+    <div class="calc-block">
+      <div class="calc-label">{label}</div>
+      <div class="calc-formula">{formula}</div>
+      <div class="calc-result {color}">{result}</div>
+    </div>"""
+
+def calc_total_html(label, value):
+    return f"""
+    <div class="calc-total">
+      <span class="calc-total-label">{label}</span>
+      <span class="calc-total-value">{value}</span>
+    </div>"""
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STEP 0 — PROJET
+# ══════════════════════════════════════════════════════════════════════════════
+if s.step == 0:
+    left, right = st.columns([1.4, 1])
+    with left:
+        st.markdown('<div class="form-section-title">📋 ' + L("Informations Projet","Project Information") + '</div>', unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        with c1:
+            s.project        = st.text_input(L("Nom du projet","Project Name"),               value=s.project)
+            s.customer       = st.text_input(L("Client","Customer"),                           value=s.customer)
+            s.project_leader = st.text_input(L("Chef de projet","Project Leader"),            value=s.project_leader)
+            s.branch         = st.text_input(L("Agence (code)","Branch (code)"),              value=s.branch)
+        with c2:
+            s.country_org    = st.text_input(L("Organisation pays","Country Organisation"),   value=s.country_org)
+            s.country        = st.text_input(L("Pays","Country"),                             value=s.country)
+            s.business_unit  = st.text_input(L("Business Unit","Business Unit"),              value=s.business_unit)
+            s.sector         = st.text_input(L("Secteur","Sector"),                           value=s.sector)
+    with right:
+        st.markdown('<div class="calc-panel">', unsafe_allow_html=True)
+        st.markdown('<div class="calc-panel-title">ℹ️ ' + L("À propos de cet outil","About this tool") + '</div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div style="font-size:0.8rem;color:#94a3b8;line-height:1.7">
+        <b style="color:#3b82f6">Polka MUP</b> — Multi-User Pricing Tool<br><br>
+        {L(
+        "Cet outil reproduit fidèlement la méthodologie du fichier MUP Excel. Il calcule le coût complet d'un entrepôt logistique et génère une grille tarifaire précise.",
+        "This tool faithfully reproduces the MUP Excel methodology. It computes the full cost of a logistics warehouse and generates an accurate price sheet."
+        )}<br><br>
+        <b style="color:#e2e8f0">{L("Les 8 étapes :","The 8 steps:")}</b><br>
+        📋 {L("Identification du projet","Project identification")}<br>
+        ⚙️ {L("Paramètres financiers","Financial parameters")}<br>
+        🏭 {L("Coûts entrepôt","Warehouse costs")}<br>
+        👷 {L("Coûts personnel","Personnel costs")}<br>
+        🚜 {L("Coûts engins","Truck costs")}<br>
+        ⚡ {L("Volumes & productivités","Volumes & productivities")}<br>
+        💶 {L("Grille tarifaire","Price sheet")}<br>
+        📊 {L("Résultats & analyse","Results & analysis")}
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
     st.markdown("---")
-    st.subheader("📋 " + T("project_summary"))
-    pi1, pi2, pi3 = st.columns(3)
-    pi1.markdown(f"**{'Projet' if lang == 'FR' else 'Project'}:** {d.get('project', '—')}\n\n**{'Client' if lang == 'FR' else 'Customer'}:** {d.get('customer', '—')}\n\n**{'Secteur' if lang == 'FR' else 'Sector'}:** {d.get('sector', '—')}")
-    pi2.markdown(f"**{'Agence' if lang == 'FR' else 'Branch'}:** {d.get('branch', '—')}\n\n**{'Chef de Projet' if lang == 'FR' else 'Project Leader'}:** {d.get('project_leader', '—')}\n\n**{'Pays' if lang == 'FR' else 'Country'}:** {d.get('country', '—')}")
-    pi3.markdown(f"**{'Jours Ouvrés' if lang == 'FR' else 'Working Days'}:** {get('working_days', 272)}\n\n**WMS:** {get('wms', 'MIKADO')}\n\n**{'Marge Cible' if lang == 'FR' else 'Target Margin'}:** {target:.1f}%")
-    nav(7)
+    nav_btns(0)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# ROUTER
-# ─────────────────────────────────────────────────────────────────────────────
-[step1, step2, step3, step4, step5, step6, step7, step8][st.session_state.step]()
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STEP 1 — PARAMÈTRES
+# ══════════════════════════════════════════════════════════════════════════════
+elif s.step == 1:
+    left, right = st.columns([1.4, 1])
+    with left:
+        st.markdown('<div class="form-section-title">⚙️ ' + L("Paramètres Généraux","General Parameters") + '</div>', unsafe_allow_html=True)
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            s.working_days   = st.number_input(L("Jours ouvrés / an","Yearly Working Days"),            value=float(s.working_days),   min_value=1.0,   max_value=365.0, step=1.0)
+            s.target_margin  = st.number_input(L("Marge cible %","Target Profit Margin %"),             value=float(s.target_margin),  min_value=0.0,   max_value=100.0, step=0.5)
+            s.interest_rate  = st.number_input(L("Taux d'intérêt interne %","Internal Interest Rate %"),value=float(s.interest_rate),  min_value=0.0,   max_value=50.0,  step=0.1, format="%.2f")
+            s.contract_years = st.number_input(L("Durée contrat (ans)","Contract Years"),               value=float(s.contract_years), min_value=1.0,   max_value=20.0,  step=1.0)
+        with c2:
+            s.wms            = st.text_input(L("Système WMS","WMS"),                                    value=s.wms)
+            s.wms_alloc_pct  = st.number_input(L("Allocation WMS %","WMS Allocation %"),                value=float(s.wms_alloc_pct),  min_value=0.0,   max_value=10.0,  step=0.1, format="%.2f")
+            s.ho_alloc_pct   = st.number_input(L("Allocation HO %","HO Allocation %"),                  value=float(s.ho_alloc_pct),   min_value=0.0,   max_value=5.0,   step=0.01, format="%.4f")
+            s.term_payment   = st.number_input(L("Délai paiement (jours)","Payment Terms (days)"),      value=float(s.term_payment),   min_value=0.0,   max_value=180.0, step=1.0)
+        with c3:
+            s.exchange_rate  = st.number_input(L("Taux de change (1 MAD = ? €)","Exchange Rate (1 MAD = ? €)"), value=float(s.exchange_rate), min_value=0.001, max_value=1.0, step=0.001, format="%.4f")
+            s.failure_rate   = st.number_input(L("Taux de panne engins %","Equipment Failure Rate %"),  value=float(s.failure_rate),   min_value=0.0,   max_value=50.0, step=0.5)
+            s.social_pct     = st.number_input(L("Charges sociales %","Social Charges %"),              value=float(s.social_pct),     min_value=0.0,   max_value=100.0, step=0.1, format="%.1f")
+
+    with right:
+        st.markdown('<div class="calc-panel">', unsafe_allow_html=True)
+        st.markdown('<div class="calc-panel-title">🔢 ' + L("Impact sur la marge","Margin Impact") + '</div>', unsafe_allow_html=True)
+        target_profit = ps_r["total_ca"] * s.target_margin / 100
+        wms_cost  = ps_r["total_ca"] * s.wms_alloc_pct / 100
+        ho_cost   = ps_r["total_ca"] * s.ho_alloc_pct  / 100
+        st.markdown(
+            calc_block_html(
+                L("Profit cible","Target Profit"),
+                f"CA × {s.target_margin:.1f}% = {fmt(ps_r['total_ca'])} × {s.target_margin:.1f}%",
+                fmt(target_profit), "green"
+            ) +
+            calc_block_html(
+                L("Coût WMS alloué","WMS Allocated Cost"),
+                f"CA × {s.wms_alloc_pct:.2f}% = {fmt(ps_r['total_ca'])} × {s.wms_alloc_pct:.2f}%",
+                fmt(wms_cost)
+            ) +
+            calc_block_html(
+                L("Coût HO alloué","HO Allocated Cost"),
+                f"CA × {s.ho_alloc_pct:.4f}% = {fmt(ps_r['total_ca'])} × {s.ho_alloc_pct:.4f}%",
+                fmt(ho_cost)
+            ) +
+            calc_block_html(
+                L("Taux de change","Exchange Rate"),
+                f"1 MAD = {s.exchange_rate:.4f} €\n1 € = {1/FX():.2f} MAD",
+                f"1 € = {1/FX():.2f} MAD", "highlight"
+            ),
+            unsafe_allow_html=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("---")
+    nav_btns(1)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STEP 2 — ENTREPÔT
+# ══════════════════════════════════════════════════════════════════════════════
+elif s.step == 2:
+    wh = calc_wh(); wh["total"] = sum(wh.values())
+    rent_eur_m2 = (s.rent_mad + s.charges_mad + s.taxes_mad) * s.exchange_rate
+
+    left, right = st.columns([1.4, 1])
+    with left:
+        st.markdown('<div class="form-section-title">📐 ' + L("Dimensions & Emplacements","Dimensions & Locations") + '</div>', unsafe_allow_html=True)
+        d1, d2, d3, d4 = st.columns(4)
+        s.wh_surface      = d1.number_input(L("Surface (m²)","Surface (m²)"),         value=float(s.wh_surface),      min_value=0.0, step=10.0)
+        s.wh_height       = d2.number_input(L("Hauteur (m)","Height (m)"),             value=float(s.wh_height),       min_value=0.0, step=0.5, format="%.1f")
+        s.gross_loc       = d3.number_input(L("Empl. bruts","Gross Locations"),        value=float(s.gross_loc),       min_value=0.0, step=1.0)
+        s.op_reserve_pct  = d4.number_input(L("Réserve op. %","Reserve %"),            value=float(s.op_reserve_pct),  min_value=0.0, max_value=50.0, step=0.5)
+        s.avg_pal         = d1.number_input(L("Palettes moy. en stock","Avg Pallets"), value=float(s.avg_pal),         min_value=0.0, step=10.0)
+        s.invest_years    = d2.number_input(L("Amortissement (ans)","Depreciation"),   value=float(s.invest_years),    min_value=1.0, max_value=30.0, step=1.0)
+
+        st.markdown('<div class="form-section-title" style="margin-top:1rem">💰 ' + L("Loyer & Charges","Rent & Charges") + '</div>', unsafe_allow_html=True)
+        r1, r2, r3 = st.columns(3)
+        s.rent_mad        = r1.number_input(L("Loyer (MAD/m²/mois)","Rent (MAD/m²/mo)"),     value=float(s.rent_mad),     min_value=0.0, step=0.5, format="%.2f")
+        s.charges_mad     = r2.number_input(L("Charges (MAD/m²/mois)","Charges (MAD/m²/mo)"),value=float(s.charges_mad),  min_value=0.0, step=0.1, format="%.2f")
+        s.taxes_mad       = r3.number_input(L("Taxes / Idilité","Taxes / Idilité"),           value=float(s.taxes_mad),    min_value=0.0, step=0.01, format="%.3f")
+
+        st.markdown('<div class="form-section-title" style="margin-top:1rem">🔧 ' + L("Investissements Entrepôt","Warehouse Investments") + '</div>', unsafe_allow_html=True)
+        i1, i2, i3, i4 = st.columns(4)
+        s.racking_ppl         = i1.number_input(L("Rayonnage €/PPL","Racking €/PPL"),    value=float(s.racking_ppl),         min_value=0.0, step=1.0)
+        s.racking_qty         = i2.number_input(L("Rayonnage qté","Racking qty"),         value=float(s.racking_qty),         min_value=0.0, step=1.0)
+        s.security_m2         = i3.number_input(L("Sécurité €/m²","Security €/m²"),       value=float(s.security_m2),         min_value=0.0, step=0.5)
+        s.cabling_m2          = i4.number_input(L("Câblage €/m²","Cabling €/m²"),         value=float(s.cabling_m2),          min_value=0.0, step=0.5)
+        s.lower_shelf_qty     = i1.number_input(L("Étagères qté","Shelves qty"),           value=float(s.lower_shelf_qty),     min_value=0.0, step=1.0)
+        s.lower_shelf_price   = i2.number_input(L("Étagères €/pc","Shelves €/pc"),         value=float(s.lower_shelf_price),   min_value=0.0, step=1.0)
+        s.grating_qty         = i3.number_input(L("Caillebotis qté","Grating qty"),        value=float(s.grating_qty),         min_value=0.0, step=1.0)
+        s.grating_price       = i4.number_input(L("Caillebotis €/pc","Grating €/pc"),      value=float(s.grating_price),       min_value=0.0, step=1.0)
+
+    with right:
+        wh = calc_wh(); wh["total"] = sum(wh.values())
+        rent_mad_total = s.rent_mad + s.charges_mad + s.taxes_mad
+        rent_eur_m2 = rent_mad_total * s.exchange_rate
+        nl = net_loc()
+
+        st.markdown('<div class="calc-panel">', unsafe_allow_html=True)
+        st.markdown('<div class="calc-panel-title">🏭 ' + L("Calcul détaillé des coûts","Detailed Cost Calculation") + f' ({PL()})</div>', unsafe_allow_html=True)
+
+        st.markdown(
+            calc_block_html(
+                L("Emplacements nets vendables","Net Sellable Locations"),
+                f"{s.gross_loc:.0f} × (1 − {s.op_reserve_pct:.0f}%)",
+                f"{nl:,} PPL", "highlight"
+            ) +
+            calc_block_html(
+                L("Loyer total","Total Rent"),
+                f"{rent_mad_total:.2f} MAD × {s.exchange_rate:.4f} × {s.wh_surface:.0f}m² × 12",
+                fmt(wh["rent"])
+            ) +
+            calc_block_html(
+                L("Rayonnage (amort.)","Racking (depreciation)"),
+                f"{s.racking_ppl:.0f}€ × {s.racking_qty:.0f} PPL\n÷ {s.invest_years:.0f} ans + intérêts {s.interest_rate:.1f}%",
+                fmt(wh["racking"])
+            ) +
+            calc_block_html(
+                L("Sécurité + Câblage","Security + Cabling"),
+                f"({s.security_m2:.0f} + {s.cabling_m2:.0f}) €/m² × {s.wh_surface:.0f}m²\n÷ 5 ans + intérêts",
+                fmt(wh["security"] + wh["cabling"])
+            ) +
+            calc_block_html(
+                L("Bureaux + Équipement","Office + Equipment"),
+                f"100 m² × {rent_eur_m2:.4f} €/m²/mois × 12 + amort.",
+                fmt(wh["office"])
+            ) +
+            calc_block_html(
+                L("Étagères + Caillebotis","Shelves + Grating"),
+                f"{s.lower_shelf_qty:.0f} × {s.lower_shelf_price:.0f}€ + {s.grating_qty:.0f} × {s.grating_price:.0f}€",
+                fmt(wh["shelves"] + wh["grating"])
+            ) +
+            calc_total_html(f"TOTAL {L('Entrepôt','Warehouse')} ({PL()})", fmt(wh["total"])),
+            unsafe_allow_html=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("---")
+    nav_btns(2)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STEP 3 — PERSONNEL
+# ══════════════════════════════════════════════════════════════════════════════
+elif s.step == 3:
+    pe = calc_pers()
+    left, right = st.columns([1.4, 1])
+
+    with left:
+        st.markdown('<div class="form-section-title">👷 ' + L("Personnel","Personnel") + '</div>', unsafe_allow_html=True)
+        sc_val = st.number_input(L("Charges sociales %","Social Charges %"), value=float(s.social_pct), min_value=0.0, max_value=100.0, step=0.1, format="%.1f", key="sc_input")
+        s.social_pct = sc_val
+
+        sc = s.social_pct / 100
+        cat_labels = {"OP":"🔵","ADM":"🟡","MGT":"🔴"}
+        cat_names  = {"OP": L("Opérationnels","Operatives"),
+                      "ADM": L("Bureau / Admin","Office / Admin"),
+                      "MGT": L("Management","Management")}
+        prev_cat = None
+        hcols = st.columns([3, 1, 1.8, 0.9, 0.9, 1.6])
+        for c, lb in zip(hcols, [L("Rôle","Role"), "FTE", L("Salaire brut (€)","Gross Salary (€)"),
+                                   L("Abs.%","Ill.%"), L("Cgs","Hol."),
+                                   L(f"Coût ({SYM()})","Cost ({SYM()})")]):
+            c.markdown(f"<div style='font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:#475569;font-weight:600'>{lb}</div>", unsafe_allow_html=True)
+
+        for i, p in enumerate(s.personnel):
+            if p["cat"] != prev_cat:
+                st.markdown(f"<div style='margin:6px 0 3px 0;font-size:.7rem;font-weight:600;color:#94a3b8'>{cat_labels[p['cat']]} {cat_names[p['cat']]}</div>", unsafe_allow_html=True)
+                prev_cat = p["cat"]
+            role = p["fr"] if s.lang == "FR" else p["en"]
+            cols = st.columns([3, 1, 1.8, 0.9, 0.9, 1.6])
+            cols[0].markdown(f"<div style='font-size:.8rem;padding:3px 0;color:#c8d0e0'>{role}</div>", unsafe_allow_html=True)
+            p["qty"]    = cols[1].number_input("", value=float(p["qty"]),    key=f"pq_{i}", min_value=0.0, max_value=20.0, step=0.25,  label_visibility="collapsed")
+            p["salary"] = cols[2].number_input("", value=float(p["salary"]), key=f"ps_{i}", min_value=0.0, step=100.0,     label_visibility="collapsed")
+            if p["cat"] != "MGT":
+                p.setdefault("illness",  4.97)
+                p.setdefault("holidays", 25)
+                ill = cols[3].number_input("", value=float(p["illness"]),  key=f"pi_{i}", min_value=0.0, max_value=50.0, step=0.1, format="%.1f", label_visibility="collapsed")
+                hol = cols[4].number_input("", value=float(p["holidays"]), key=f"ph_{i}", min_value=0.0, max_value=60.0, step=1.0, label_visibility="collapsed")
+                p["illness"] = ill; p["holidays"] = hol
+            else:
+                cols[3].markdown("<div style='color:#334155;font-size:.8rem;padding:3px 0'>—</div>", unsafe_allow_html=True)
+                cols[4].markdown("<div style='color:#334155;font-size:.8rem;padding:3px 0'>—</div>", unsafe_allow_html=True)
+            annual = p["salary"] * p["qty"] * (1 + sc) if p["qty"] > 0 else 0
+            cols[5].markdown(f"<div style='font-size:.78rem;font-family:JetBrains Mono,monospace;color:#dde3f0;padding:3px 0'>{fmt(annual)}</div>", unsafe_allow_html=True)
+
+    with right:
+        pe = calc_pers()
+        st.markdown('<div class="calc-panel">', unsafe_allow_html=True)
+        st.markdown('<div class="calc-panel-title">👷 ' + L("Calcul des coûts personnel","Personnel Cost Calculation") + f' ({PL()})</div>', unsafe_allow_html=True)
+
+        op_fte  = sum(p["qty"] for p in s.personnel if p["cat"]=="OP")
+        adm_fte = sum(p["qty"] for p in s.personnel if p["cat"]=="ADM")
+        mgt_fte = sum(p["qty"] for p in s.personnel if p["cat"]=="MGT")
+        st.markdown(
+            calc_block_html(
+                L("Formule coût annuel","Annual Cost Formula"),
+                f"Salaire brut × ETP × (1 + {s.social_pct:.1f}%)",
+                L("Par rôle, somme ci-dessous","Per role, summed below")
+            ) +
+            calc_block_html(
+                L("🔵 Opérationnels (variable)","🔵 Operatives (variable)"),
+                f"{op_fte:.2f} FTE × salaire moyen × (1+{s.social_pct:.1f}%)",
+                fmt(pe["var"]), "highlight"
+            ) +
+            calc_block_html(
+                L("🟡 Bureau + 🔴 Management (fixe)","🟡 Office + 🔴 Management (fixed)"),
+                f"{adm_fte:.2f} + {mgt_fte:.2f} = {adm_fte+mgt_fte:.2f} FTE fixes",
+                fmt(pe["fix"])
+            ) +
+            calc_block_html(
+                L("Répartition fixe / variable","Fixed / Variable Split"),
+                f"Variable: {pe['var']/pe['total']*100:.1f}%  ·  Fixe: {pe['fix']/pe['total']*100:.1f}%" if pe["total"] > 0 else "—",
+                f"Total FTE: {pe['fte']:.2f}", "highlight"
+            ) +
+            calc_total_html(f"TOTAL {L('Personnel','Personnel')} ({PL()})", fmt(pe["total"])),
+            unsafe_allow_html=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("---")
+    nav_btns(3)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STEP 4 — ENGINS
+# ══════════════════════════════════════════════════════════════════════════════
+elif s.step == 4:
+    left, right = st.columns([1.4, 1])
+
+    with left:
+        st.markdown('<div class="form-section-title">🚜 ' + L("Engins de manutention","Industrial Trucks") + '</div>', unsafe_allow_html=True)
+        hcols = st.columns([3.2, 0.7, 2, 1.8, 1.4, 1.8])
+        for c, lb in zip(hcols, [L("Engin","Truck"), L("Qté","Qty"),
+                                   L("Location/Achat","Rent/Purchase"),
+                                   L("Prix total (€)","Total Price (€)"),
+                                   L("Amort.","Depr."),
+                                   L(f"Coût/an ({SYM()})","Annual Cost ({SYM()})")]):
+            c.markdown(f"<div style='font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:#475569;font-weight:600'>{lb}</div>", unsafe_allow_html=True)
+
+        total_tk = 0.0
+        for i, tk in enumerate(s.trucks):
+            name = tk["fr"] if s.lang == "FR" else tk["en"]
+            cols = st.columns([3.2, 0.7, 2, 1.8, 1.4, 1.8])
+            cols[0].markdown(f"<div style='font-size:.78rem;padding:3px 0'><span style='color:#475569;font-size:.65rem'>{tk['code']}</span> {name}</div>", unsafe_allow_html=True)
+            tk["qty"]       = cols[1].number_input("", value=float(tk["qty"]),       key=f"tq_{i}", min_value=0.0, max_value=20.0, step=0.5, label_visibility="collapsed")
+            tk["mode"]      = cols[2].selectbox("",   ["External Rent","Purchase"],   key=f"tm_{i}", index=0 if tk["mode"]=="External Rent" else 1, label_visibility="collapsed")
+            tk["price"]     = cols[3].number_input("", value=float(tk["price"]),      key=f"tp_{i}", min_value=0.0, step=100.0, label_visibility="collapsed")
+            tk["depr_years"]= cols[4].number_input("", value=float(tk["depr_years"]), key=f"td_{i}", min_value=1.0, max_value=20.0, step=1.0, label_visibility="collapsed")
+            annual = inv_annual(tk["price"] * tk["qty"], s.interest_rate, tk["depr_years"], 2.0) if tk["qty"] > 0 else 0.0
+            total_tk += annual
+            cols[5].markdown(f"<div style='font-size:.78rem;font-family:JetBrains Mono,monospace;color:{'#22c55e' if annual>0 else '#334155'};padding:3px 0'>{fmt(annual) if tk['qty']>0 else '—'}</div>", unsafe_allow_html=True)
+
+    with right:
+        total_tk = calc_trucks_total()
+        st.markdown('<div class="calc-panel">', unsafe_allow_html=True)
+        st.markdown('<div class="calc-panel-title">🚜 ' + L("Calcul des coûts engins","Truck Cost Calculation") + f' ({PL()})</div>', unsafe_allow_html=True)
+
+        active_trucks = [tk for tk in s.trucks if tk["qty"] > 0]
+        formula_lines = []
+        for tk in active_trucks:
+            invest = tk["price"] * tk["qty"]
+            ann = inv_annual(invest, s.interest_rate, tk["depr_years"], 2.0)
+            formula_lines.append(f"{tk['code']}: {tk['qty']:.0f}×{tk['price']:,.0f}€ → {fmt(ann)}")
+
+        formula_str = "\n".join(formula_lines) if formula_lines else L("Aucun engin alloué","No trucks allocated")
+
+        st.markdown(
+            calc_block_html(
+                L("Formule annualisation","Annualisation Formula"),
+                f"Invest ÷ {s.interest_rate:.0f}ans + intérêts ({s.interest_rate:.1f}%)\n+ maintenance (2%)",
+                L("Voir détail par engin →","See detail per truck →")
+            ) +
+            calc_block_html(
+                L("Détail par engin alloué","Detail per allocated truck"),
+                formula_str,
+                f"{len(active_trucks)} {L('engin(s) actif(s)','active truck(s)')}", "highlight"
+            ) +
+            calc_total_html(f"TOTAL {L('Engins','Trucks')} ({PL()})", fmt(total_tk)),
+            unsafe_allow_html=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("---")
+    nav_btns(4)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STEP 5 — PROCESSUS & VOLUMES
+# ══════════════════════════════════════════════════════════════════════════════
+elif s.step == 5:
+    wd = s.working_days
+    group_labels = {
+        "inbound":    L("📥 Réception (Inbound)","📥 Inbound"),
+        "picking":    L("🎯 Préparation (Picking)","🎯 Picking"),
+        "relocation": L("🔄 Réapprovisionnement","🔄 Relocation"),
+        "outbound":   L("📤 Sortie Palette Complète","📤 Outbound Full Pallet"),
+        "loading":    L("🚛 Chargement","🚛 Loading"),
+    }
+
+    left, right = st.columns([1.4, 1])
+    with left:
+        cur_grp = None
+        hcols = st.columns([0.5, 3.5, 1.3, 2.5, 1.4, 1.4, 1.2])
+        for c, lb in zip(hcols, ["✓", L("Processus","Process"), L("Volume/an","Vol/year"),
+                                   L("Unité","Unit"), L("Prod.brute/h","Gross/h"),
+                                   L("Prod.nette/h","Net/h"), L("h/jour","h/day")]):
+            c.markdown(f"<div style='font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:#475569;font-weight:600'>{lb}</div>", unsafe_allow_html=True)
+
+        for i, proc in enumerate(s.processes):
+            if proc["group"] != cur_grp:
+                cur_grp = proc["group"]
+                st.markdown(f"<div style='margin:8px 0 2px 0;font-size:.72rem;font-weight:600;color:#3b82f6'>{group_labels[cur_grp]}</div>", unsafe_allow_html=True)
+
+            pk   = f"proc_{i}"
+            name = proc["fr"] if s.lang == "FR" else proc["en"]
+            unit = proc["b_fr"] if s.lang == "FR" else proc["b_en"]
+            cols = st.columns([0.5, 3.5, 1.3, 2.5, 1.4, 1.4, 1.2])
+            proc["active"]     = cols[0].checkbox("", value=proc["active"], key=f"pa_{pk}", label_visibility="collapsed")
+            color = "#dde3f0" if proc["active"] else "#334155"
+            cols[1].markdown(f"<div style='font-size:.78rem;padding:3px 0;color:{color}'>{name}</div>", unsafe_allow_html=True)
+            if proc["active"]:
+                proc["volume"]     = cols[2].number_input("", value=float(proc["volume"]),     key=f"pv_{pk}", min_value=0.0, step=100.0, label_visibility="collapsed")
+                cols[3].markdown(f"<div style='font-size:.72rem;color:#64748b;padding:4px 0'>{unit}</div>", unsafe_allow_html=True)
+                proc["prod_gross"] = cols[4].number_input("", value=float(proc["prod_gross"]), key=f"pg_{pk}", min_value=0.1, step=1.0, format="%.2f", label_visibility="collapsed")
+                proc["prod_net"]   = cols[5].number_input("", value=float(proc["prod_net"]),   key=f"pn_{pk}", min_value=0.1, step=1.0, format="%.2f", label_visibility="collapsed")
+                h_day = proc["volume"] / wd / proc["prod_net"] if wd > 0 and proc["prod_net"] > 0 else 0
+                cols[6].markdown(f"<div style='font-size:.78rem;font-family:JetBrains Mono,monospace;color:#3b82f6;padding:3px 0'>{h_day:.2f}h</div>", unsafe_allow_html=True)
+            else:
+                for c in cols[2:]: c.markdown("<div style='color:#1e2a45;font-size:.8rem;padding:3px 0'>—</div>", unsafe_allow_html=True)
+
+    with right:
+        st.markdown('<div class="calc-panel">', unsafe_allow_html=True)
+        st.markdown('<div class="calc-panel-title">⚡ ' + L("Analyse des charges","Workload Analysis") + '</div>', unsafe_allow_html=True)
+        total_h_day = 0.0
+        for proc in s.processes:
+            if proc["active"] and proc["prod_net"] > 0 and wd > 0:
+                h = proc["volume"] / wd / proc["prod_net"]
+                total_h_day += h
+        needed_fte = total_h_day / 7.5 if total_h_day > 0 else 0  # ~7.5h paid per day
+
+        st.markdown(
+            calc_block_html(
+                L("Charge journalière totale","Total Daily Workload"),
+                L(f"Σ (Volume annuel ÷ {wd:.0f} jours ÷ prod. nette)",
+                  f"Σ (Annual volume ÷ {wd:.0f} days ÷ net productivity)"),
+                f"{total_h_day:.2f} h/jour", "highlight"
+            ) +
+            calc_block_html(
+                L("FTE opérationnels estimés","Estimated Operative FTE"),
+                f"{total_h_day:.2f}h ÷ 7.5h/ETP/jour",
+                f"≈ {needed_fte:.2f} FTE", "green" if needed_fte <= pe_r["fte"] else "down"
+            ) +
+            calc_block_html(
+                L("FTE alloués (étape 4)","Allocated FTE (step 4)"),
+                L("Opérationnels dans Cockpit Personnel",
+                  "Operatives in Cockpit Personnel"),
+                f"{sum(p['qty'] for p in s.personnel if p['cat']=='OP'):.2f} FTE OP"
+            ),
+            unsafe_allow_html=True
+        )
+        # Process summary table
+        st.markdown(f"<div style='font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:#475569;margin-top:10px;margin-bottom:6px'>{L('Processus actifs','Active Processes')}</div>", unsafe_allow_html=True)
+        for proc in s.processes:
+            if not proc["active"]: continue
+            name = proc["fr"] if s.lang == "FR" else proc["en"]
+            h = proc["volume"] / wd / proc["prod_net"] if wd > 0 and proc["prod_net"] > 0 else 0
+            st.markdown(f"<div style='display:flex;justify-content:space-between;font-size:.72rem;padding:2px 0;border-bottom:1px solid #1e2a45'><span style='color:#94a3b8'>{name[:28]}</span><span style='font-family:JetBrains Mono,monospace;color:#3b82f6'>{h:.2f}h</span></div>", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("---")
+    nav_btns(5)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STEP 6 — GRILLE TARIFAIRE
+# ══════════════════════════════════════════════════════════════════════════════
+elif s.step == 6:
+    nl = net_loc()
+
+    left, right = st.columns([1.4, 1])
+    with left:
+        st.markdown(f'<div class="form-section-title">💶 {L("Grille Tarifaire","Price Sheet")} — {PL()} · {SYM()}</div>', unsafe_allow_html=True)
+
+        # Column headers
+        hcols = st.columns([2.8, 2, 1.3, 1.8, 1.8, 1.4])
+        for c, lb in zip(hcols, [
+            L("Ligne","Line"), L("Unité de facturation","Billing Unit"),
+            L("Volume","Volume"),
+            L(f"Coût unit. ({SYM()})","Unit Cost ({SYM()})"),
+            L(f"Prix vente ({SYM()})","Selling Price ({SYM()})"),
+            L("Marge %","Margin %"),
+        ]):
+            c.markdown(f"<div style='font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:#475569;font-weight:600'>{lb}</div>", unsafe_allow_html=True)
+
+        st.markdown("<hr>", unsafe_allow_html=True)
+
+        def prow(label, unit, volume, cost_eur, price_eur_key, price_eur_val, row_i, is_ss=False):
+            cols = st.columns([2.8, 2, 1.3, 1.8, 1.8, 1.4])
+            cols[0].markdown(f"<div style='font-size:.8rem;padding:3px 0'>{label}</div>", unsafe_allow_html=True)
+            cols[1].markdown(f"<div style='font-size:.72rem;color:#64748b;padding:4px 0'>{unit}</div>", unsafe_allow_html=True)
+            cols[2].markdown(f"<div style='font-size:.78rem;font-family:JetBrains Mono,monospace;color:#94a3b8;padding:3px 0'>{volume:,}</div>", unsafe_allow_html=True)
+            cols[3].markdown(f"<div style='font-size:.78rem;font-family:JetBrains Mono,monospace;color:#475569;padding:3px 0'>{fmt_u(cost_eur)}</div>", unsafe_allow_html=True)
+            # Price input in display currency
+            disp = to_cur(price_eur_val)
+            new_disp = cols[4].number_input("", value=float(disp), key=f"price_{row_i}",
+                                             min_value=0.0, step=0.01 if s.cur=="EUR" else 0.1,
+                                             format="%.4f" if s.cur=="EUR" else "%.3f",
+                                             label_visibility="collapsed")
+            new_eur = from_cur(new_disp)
+            # Compute CA and margin
+            ca   = new_eur * volume
+            cost = cost_eur * volume
+            margin_v = (ca - cost) / ca * 100 if ca > 0 else 0
+            m_col = "#22c55e" if margin_v >= s.target_margin else "#ef4444"
+            cols[5].markdown(f"<div style='font-size:.78rem;font-family:JetBrains Mono,monospace;color:{m_col};font-weight:600;padding:3px 0'>{margin_v:.1f}%</div>", unsafe_allow_html=True)
+            return new_eur, ca, cost
+
+        row_i = 0
+        # Storage
+        new_ps, ca_s, co_s = prow(L("Stockage","Storage"),
+                                    L("Emplacement/mois","Location/month"),
+                                    nl*12, s.cost_storage, "storage_price", s.price_storage, row_i)
+        s.price_storage = new_ps; row_i += 1
+
+        # Fixed
+        new_pf, ca_f, co_f = prow(L("Forfait fixe mensuel","Fixed Monthly Lump Sum"),
+                                    L("Mois","Month"),
+                                    12, s.cost_fixed, "fixed_price", s.price_fixed, row_i)
+        s.price_fixed = new_pf; row_i += 1
+
+        st.markdown("<div style='border-top:1px solid #1e2a45;margin:4px 0'></div>", unsafe_allow_html=True)
+
+        # Processes
+        for proc in s.processes:
+            if not proc["active"]: continue
+            name = proc["fr"] if s.lang == "FR" else proc["en"]
+            unit = proc["b_fr"] if s.lang == "FR" else proc["b_en"]
+            new_pp, _, _ = prow(name, unit, proc["volume"],
+                                 proc["cost_unit"], f"proc_{proc['code']}", proc["price"], row_i)
+            proc["price"] = new_pp; row_i += 1
+
+    with right:
+        ps = calc_ps()
+        st.markdown('<div class="calc-panel">', unsafe_allow_html=True)
+        st.markdown('<div class="calc-panel-title">💶 ' + L("Analyse de la grille","Price Sheet Analysis") + f' ({PL()} · {SYM()})</div>', unsafe_allow_html=True)
+
+        wms_c = ps["total_ca"] * s.wms_alloc_pct / 100
+        ho_c  = ps["total_ca"] * s.ho_alloc_pct  / 100
+        m_color = "green" if ps["margin"] >= s.target_margin else "down"
+
+        # Top process by CA
+        proc_lines = sorted([l for l in ps["lines"] if l.get("code")], key=lambda x: x["ca"], reverse=True)
+        top_line   = proc_lines[0] if proc_lines else None
+
+        st.markdown(
+            calc_block_html(
+                L("CA processus variables","Variable Process Revenue"),
+                L(f"Σ prix × volume, {len(proc_lines)} processus actifs",
+                  f"Σ price × volume, {len(proc_lines)} active processes"),
+                fmt(sum(l["ca"] for l in proc_lines)), "highlight"
+            ) +
+            calc_block_html(
+                L("Stockage + Forfait fixe","Storage + Fixed"),
+                f"{fmt(ps['lines'][0]['ca'])} + {fmt(ps['lines'][1]['ca'])}",
+                fmt(ps["lines"][0]["ca"] + ps["lines"][1]["ca"])
+            ) +
+            calc_block_html(
+                L("WMS + HO (% du CA)","WMS + HO (% of Revenue)"),
+                f"{s.wms_alloc_pct:.2f}% + {s.ho_alloc_pct:.4f}% × CA",
+                fmt(wms_c + ho_c)
+            ) +
+            calc_block_html(
+                L("Marge réalisée","Achieved Margin"),
+                f"(CA - Coûts) ÷ CA × 100\nCible: {s.target_margin:.1f}%",
+                f"{ps['margin']:.2f}%", m_color
+            ) +
+            calc_total_html(f"CA TOTAL {L('','Revenue')} ({PL()})", fmt(ps["total_ca"])),
+            unsafe_allow_html=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("---")
+    nav_btns(6)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STEP 7 — RÉSULTATS
+# ══════════════════════════════════════════════════════════════════════════════
+elif s.step == 7:
+    wh, pe, tk, ps = calc_all()
+    target = s.target_margin
+    margin = ps["margin"]
+    gap    = margin - target
+
+    # Success/error banner
+    if margin >= target:
+        st.success(f"✅ {L('Marge réalisée','Actual Margin')} **{margin:.2f}%** ≥ {L('Cible','Target')} **{target:.1f}%** — {L('Projet rentable ✓','Profitable project ✓')}")
+    else:
+        st.error(f"❌ {L('Marge réalisée','Actual Margin')} **{margin:.2f}%** < {L('Cible','Target')} **{target:.1f}%** — {L('Réviser les tarifs','Revise pricing')} ({gap:+.2f}%)")
+
+    st.markdown("---")
+
+    # Top KPIs
+    st.markdown(f"<div style='font-size:.65rem;text-transform:uppercase;letter-spacing:1.5px;color:#3b82f6;font-weight:600;margin-bottom:.8rem'>{L('INDICATEURS CLÉS','KEY METRICS')} — {PL()} · {SYM()}</div>", unsafe_allow_html=True)
+    k1, k2, k3, k4, k5, k6 = st.columns(6)
+    k1.metric(L("Chiffre d'affaires","Revenue"),     fmt(ps["total_ca"]))
+    k2.metric(L("Coûts totaux","Total Costs"),        fmt(ps["total_cost"]))
+    k3.metric(L("Profit","Profit"),                   fmt(ps["profit"]),    delta=f"{gap:+.2f}%", delta_color="normal" if gap>=0 else "inverse")
+    k4.metric(L("Marge réelle","Actual Margin"),      f"{margin:.2f}%")
+    k5.metric(L("Marge cible","Target Margin"),       f"{target:.1f}%")
+    k6.metric(L("Emplacements nets","Net Locations"), f"{net_loc():,} PPL")
+
+    st.markdown("---")
+    col_a, col_b = st.columns(2)
+
+    # ── COST BREAKDOWN ──
+    with col_a:
+        st.markdown(f"<div style='font-size:.65rem;text-transform:uppercase;letter-spacing:1.5px;color:#3b82f6;font-weight:600;margin-bottom:.8rem'>{L('DÉCOMPOSITION DES COÛTS','COST BREAKDOWN')} ({PL()} · {SYM()})</div>", unsafe_allow_html=True)
+        total_costs = ps["total_cost"]
+        cost_rows = [
+            ("🏭", L("Entrepôt","Warehouse"),     wh["total"],   "#3b82f6"),
+            ("👷", L("Personnel","Personnel"),    pe["total"],   "#8b5cf6"),
+            ("🚜", L("Engins","Trucks"),           tk,            "#06b6d4"),
+            ("💻", "WMS",                          ps["wms"],     "#f59e0b"),
+            ("🏢", "HO",                           ps["ho"],      "#10b981"),
+        ]
+        for icon, label, val, color in cost_rows:
+            pct = val / total_costs * 100 if total_costs > 0 else 0
+            pct_ca = val / ps["total_ca"] * 100 if ps["total_ca"] > 0 else 0
+            st.markdown(f"""
+            <div style="margin-bottom:12px">
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                <span style="font-size:.82rem">{icon} {label}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:.82rem;color:#e2e8f0">{fmt(val)} <span style="color:#475569;font-size:.72rem">({pct_ca:.1f}% CA)</span></span>
+              </div>
+              <div style="background:#1e2a45;border-radius:3px;height:5px;overflow:hidden">
+                <div style="background:{color};height:100%;width:{min(pct*1.2,100):.1f}%;border-radius:3px;transition:width .4s"></div>
+              </div>
+              <div style="font-size:.65rem;color:#475569;margin-top:2px">{pct:.1f}% {L('des coûts','of costs')}</div>
+            </div>""", unsafe_allow_html=True)
+
+        # Full cost reconciliation
+        st.markdown(f"""
+        <div style="background:#060b14;border:1px solid #1e2a45;border-radius:8px;padding:12px;margin-top:8px">
+          <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:#475569;margin-bottom:8px">{L('RÉCONCILIATION','RECONCILIATION')}</div>
+          <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:3px"><span style="color:#94a3b8">CA</span><span style="font-family:JetBrains Mono,monospace;color:#3b82f6">{fmt(ps['total_ca'])}</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:3px"><span style="color:#94a3b8">− Coûts</span><span style="font-family:JetBrains Mono,monospace;color:#e2e8f0">− {fmt(total_costs)}</span></div>
+          <div style="border-top:1px solid #1e2a45;margin:6px 0"></div>
+          <div style="display:flex;justify-content:space-between;font-size:.9rem;font-weight:700"><span style="color:#94a3b8">=  Profit</span><span style="font-family:JetBrains Mono,monospace;color:{'#22c55e' if ps['profit']>=0 else '#ef4444'}">{fmt(ps['profit'])}</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-top:4px"><span style="color:#94a3b8">Marge</span><span style="font-family:JetBrains Mono,monospace;color:{'#22c55e' if margin>=target else '#ef4444'};font-weight:600">{margin:.2f}% {L('vs cible','vs target')} {target:.1f}%</span></div>
+        </div>""", unsafe_allow_html=True)
+
+    # ── REVENUE BREAKDOWN ──
+    with col_b:
+        st.markdown(f"<div style='font-size:.65rem;text-transform:uppercase;letter-spacing:1.5px;color:#3b82f6;font-weight:600;margin-bottom:.8rem'>{L('DÉTAIL DU CA','REVENUE BREAKDOWN')} ({PL()} · {SYM()})</div>", unsafe_allow_html=True)
+        lines_sorted = sorted(ps["lines"], key=lambda x: x["ca"], reverse=True)
+        for line in lines_sorted:
+            ca_v = line["ca"]
+            pct  = ca_v / ps["total_ca"] * 100 if ps["total_ca"] > 0 else 0
+            cost_line = line["cost"]
+            margin_line = (ca_v - cost_line) / ca_v * 100 if ca_v > 0 else 0
+            mc = "#22c55e" if margin_line >= target else "#ef4444"
+            st.markdown(f"""
+            <div style="margin-bottom:10px">
+              <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+                <span style="font-size:.78rem;color:#c8d0e0">{line['name']}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:.78rem;color:#3b82f6">{fmt(ca_v)}</span>
+              </div>
+              <div style="background:#1e2a45;border-radius:3px;height:4px;overflow:hidden">
+                <div style="background:#22c55e;height:100%;width:{min(pct*1.5,100):.1f}%;border-radius:3px"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:.65rem;color:#475569;margin-top:2px">
+                <span>{pct:.1f}% CA</span>
+                <span style="color:{mc}">marge: {margin_line:.1f}%</span>
+              </div>
+            </div>""", unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # ── RATIOS ──
+    st.markdown(f"<div style='font-size:.65rem;text-transform:uppercase;letter-spacing:1.5px;color:#3b82f6;font-weight:600;margin-bottom:.8rem'>{L('RATIOS EFFICACITÉ','EFFICIENCY RATIOS')}</div>", unsafe_allow_html=True)
+    r1, r2, r3, r4, r5 = st.columns(5)
+    surf = s.wh_surface; fte = pe["fte"]
+    r1.metric("CA / m²",                                    fmt(ps["total_ca"] / surf) if surf > 0 else "—")
+    r2.metric(L("CA / emplacement","CA / Location"),         fmt(ps["total_ca"] / net_loc()) if net_loc() > 0 else "—")
+    r3.metric(L("Coût / m²","Cost / m²"),                   fmt(ps["total_cost"] / surf) if surf > 0 else "—")
+    r4.metric(L("Profit / FTE","Profit / FTE"),             fmt(ps["profit"] / fte) if fte > 0 else "—")
+    r5.metric(L("CA / FTE","Revenue / FTE"),                fmt(ps["total_ca"] / fte) if fte > 0 else "—")
+
+    st.markdown("---")
+
+    # ── PROJECT CARD ──
+    st.markdown(f"<div style='font-size:.65rem;text-transform:uppercase;letter-spacing:1.5px;color:#3b82f6;font-weight:600;margin-bottom:.8rem'>{L('FICHE PROJET','PROJECT CARD')}</div>", unsafe_allow_html=True)
+    pc1, pc2, pc3 = st.columns(3)
+    def info_card(title, rows):
+        cells = "".join([f"<div style='margin-bottom:6px'><div style='font-size:.65rem;color:#475569'>{k}</div><div style='font-size:.85rem;font-weight:500;color:#e2e8f0'>{v}</div></div>" for k,v in rows])
+        return f"""<div style="background:#060b14;border:1px solid #1e2a45;border-radius:8px;padding:14px">
+        <div style="font-size:.62rem;text-transform:uppercase;letter-spacing:1.2px;color:#3b82f6;font-weight:600;margin-bottom:10px">{title}</div>
+        {cells}</div>"""
+    pc1.markdown(info_card(L("Identification","Identification"), [
+        (L("Projet","Project"), s.project), (L("Client","Customer"), s.customer), (L("Secteur","Sector"), s.sector)
+    ]), unsafe_allow_html=True)
+    pc2.markdown(info_card(L("Localisation","Location"), [
+        (L("Agence","Branch"), s.branch), (L("Pays","Country"), s.country), (L("Chef de projet","Project Leader"), s.project_leader)
+    ]), unsafe_allow_html=True)
+    pc3.markdown(info_card(L("Paramètres clés","Key Parameters"), [
+        (L("WMS · Jours ouvrés","WMS · Working Days"), f"{s.wms} · {s.working_days:.0f}j"),
+        (L("Contrat · Marge cible","Contract · Target Margin"), f"{s.contract_years:.0f} {L('ans','years')} · {target:.1f}%"),
+        (L("Surface · Empl. nets","Surface · Net Loc."), f"{surf:.0f} m² · {net_loc():,} PPL"),
+    ]), unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    nav_btns(7)
