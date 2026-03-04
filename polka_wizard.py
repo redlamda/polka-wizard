@@ -1,877 +1,944 @@
 """
-╔══════════════════════════════════════════════════════════════════════════════════╗
-║   POLKA WIZARD v2 — Outil de tarification Contract Logistics                    ║
-║   Basé sur Polka V202541 · OCP Morocco · Dachser CL                             ║
-║   Lancement : streamlit run polka_wizard.py                                     ║
-╚══════════════════════════════════════════════════════════════════════════════════╝
+POLKA WIZARD v3 — Tarification Contract Logistics
+Basé sur Polka V202541 · OCP Morocco · Dachser CL
+Lancement : streamlit run polka_wizard.py
 """
 
 import streamlit as st
 import pandas as pd
-import numpy as np
 from copy import deepcopy
 import json
 
 st.set_page_config(
-    page_title="Polka Wizard — Tarification Logistique",
+    page_title="Polka Wizard — Tarification",
     page_icon="📦",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
+# ── THÈME CLAIR & LISIBLE ────────────────────────────────
 st.markdown("""
 <style>
-.stApp { background-color: #0f1117; color: #e8eaf6; }
-.block-container { padding-top: 1.2rem; max-width: 1200px; }
-[data-testid="stSidebar"] { background-color: #13161f; border-right: 1px solid #252840; }
-.step-hdr { background: #13161f; border-left: 4px solid #4f7cff;
-            border-radius: 0 12px 12px 0; padding: 14px 20px; margin-bottom: 20px; }
-.step-num { font-size: 11px; color: #4f7cff; text-transform: uppercase; letter-spacing: 0.8px; }
-.step-title { font-size: 20px; font-weight: 800; margin: 3px 0; }
-.step-desc { font-size: 13px; color: #7b82a8; }
-.help-box { background: rgba(79,124,255,0.07); border: 1px solid rgba(79,124,255,0.25);
-            border-radius: 10px; padding: 12px 15px; font-size: 12px; color: #a0aacc;
-            margin: 8px 0 14px 0; line-height: 1.6; }
-.help-box strong { color: #c5cae9; }
-.res-card { background: #13161f; border: 1px solid #252840;
-            border-radius: 12px; padding: 16px 18px; margin: 8px 0; }
-.res-green { color: #22d3a0; font-size: 20px; font-weight: 800; }
-.res-red   { color: #ff5c6a; font-size: 20px; font-weight: 800; }
-.res-blue  { color: #4f7cff; font-size: 20px; font-weight: 800; }
-.res-label { font-size: 11px; color: #7b82a8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-.res-sub   { font-size: 11px; color: #7b82a8; margin-top: 3px; }
-.warn  { background: rgba(255,181,71,0.08); border: 1px solid rgba(255,181,71,0.3);
-         border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #ffb547; margin: 8px 0; }
-.ok    { background: rgba(34,211,160,0.08); border: 1px solid rgba(34,211,160,0.3);
-         border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #22d3a0; margin: 8px 0; }
-.info  { background: rgba(79,124,255,0.08); border: 1px solid rgba(79,124,255,0.3);
-         border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #7b9fff; margin: 8px 0; }
-.sec-title { font-size: 14px; font-weight: 700; color: #c5cae9;
-             border-bottom: 1px solid #252840; padding-bottom: 6px; margin: 18px 0 10px 0; }
+/* Corps principal */
+.stApp { background: #f0f2f8; color: #1a1d2e; font-family: 'Inter', sans-serif; }
+.block-container { padding-top: 1rem; max-width: 1280px; }
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background: #1e2240;
+    color: #e8eaf6;
+}
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] .stRadio label { color: #c5cae9 !important; }
+[data-testid="stSidebar"] p { color: #9fa8da; }
+
+/* Titres étape */
+.step-hdr {
+    background: linear-gradient(135deg, #1e2240, #2a3060);
+    border-left: 5px solid #5c7cff;
+    border-radius: 0 14px 14px 0;
+    padding: 16px 22px;
+    margin-bottom: 22px;
+    color: white;
+}
+.step-num  { font-size: 11px; color: #8899ff; text-transform: uppercase; letter-spacing: 1px; }
+.step-ttl  { font-size: 22px; font-weight: 800; margin: 4px 0; }
+.step-dsc  { font-size: 13px; color: #aab4d8; }
+
+/* Boîte d'aide */
+.help-box {
+    background: #e8edff;
+    border-left: 4px solid #5c7cff;
+    border-radius: 0 10px 10px 0;
+    padding: 11px 15px;
+    font-size: 12.5px;
+    color: #2a3060;
+    margin: 6px 0 14px 0;
+    line-height: 1.65;
+}
+
+/* Cartes résultat */
+.kpi-row { display: flex; gap: 14px; flex-wrap: wrap; margin: 14px 0; }
+.kpi { background: white; border: 1px solid #dce3f5; border-radius: 12px;
+       padding: 16px 20px; flex: 1; min-width: 160px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+.kpi-lbl { font-size: 11px; color: #6b7bad; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 5px; }
+.kpi-val { font-size: 22px; font-weight: 800; }
+.kpi-sub { font-size: 11px; color: #8892b0; margin-top: 3px; }
+.green  { color: #0d9e6e; }
+.red    { color: #d63c4a; }
+.blue   { color: #2952d9; }
+.orange { color: #d97706; }
+
+/* Alertes */
+.alert-ok   { background: #d1fae5; border: 1px solid #6ee7b7; border-radius: 8px;
+               padding: 10px 14px; font-size: 13px; color: #065f46; margin: 8px 0; }
+.alert-warn { background: #fff3cd; border: 1px solid #fcd34d; border-radius: 8px;
+               padding: 10px 14px; font-size: 13px; color: #92400e; margin: 8px 0; }
+.alert-info { background: #dbeafe; border: 1px solid #93c5fd; border-radius: 8px;
+               padding: 10px 14px; font-size: 13px; color: #1e40af; margin: 8px 0; }
+
+/* Section */
+.sec { font-size: 14px; font-weight: 700; color: #2a3060;
+       border-bottom: 2px solid #c5cdf5; padding-bottom: 5px; margin: 20px 0 10px 0; }
+
+/* Process flow */
+.proc-box {
+    background: white; border: 2px solid #c5cdf5;
+    border-radius: 12px; padding: 14px 16px; margin: 6px 0;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+.proc-title { font-weight: 700; color: #1e2240; font-size: 14px; margin-bottom: 6px; }
+.proc-step  { background: #f0f4ff; border-radius: 6px; padding: 5px 10px;
+               font-size: 12px; color: #2a3060; margin: 3px 0; display: inline-block; }
+.proc-arrow { color: #5c7cff; font-size: 18px; margin: 0 6px; }
+.badge-active   { background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+.badge-inactive { background: #f3f4f6; color: #9ca3af; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+
+/* Inputs lisibles */
+.stNumberInput > label { color: #2a3060 !important; font-weight: 600; }
+.stTextInput > label   { color: #2a3060 !important; font-weight: 600; }
+.stSlider > label      { color: #2a3060 !important; font-weight: 600; }
+.stCheckbox > label    { color: #2a3060 !important; font-weight: 600; }
+.stSelectbox > label   { color: #2a3060 !important; font-weight: 600; }
+
+/* Tableau */
+[data-testid="stDataFrame"] { border-radius: 10px; overflow: hidden; }
+
+/* Boutons navigation */
+.stButton button[kind="primary"] {
+    background: linear-gradient(135deg, #2952d9, #5c7cff) !important;
+    color: white !important; border: none !important;
+    border-radius: 8px !important; font-weight: 700 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# ── DONNÉES OCP RÉELLES ──────────────────────────────────
+# ── DONNÉES OCP ──────────────────────────────────────────
 OCP = {
+    # Projet
     "projet": "OCP", "chef_projet": "Reda Lamdarhri Kachani",
     "agence": "MA-Mohammedia (580)", "pays": "Maroc", "wms": "MIKADO",
-    "jours_ouvres": 272, "taux_interet": 0.09, "marge_cible": 0.10,
-    "reserve_op": 0.10, "taux_panne": 0.05, "alloc_wms": 0.022,
-    "batteries_li": True, "prime_risque_fret": 0.15, "prime_risque_colis": 0.05,
+    # Params globaux
+    "jours_ouvres": 272, "taux_interet": 9.0, "marge_cible": 10.0,
+    "reserve_op": 10.0, "taux_panne": 5.0, "alloc_wms": 2.2,
+    "batteries_li": True, "prime_fret": 15.0, "prime_colis": 5.0,
+    "taux_change_mad": 10.84,
+    # Entrepôt
     "surface_m2": 4039.74, "hauteur_m": 10.0, "emplacements_brut": 4211,
-    "taux_utilisation": 0.95,
-    "loyer_m2_mois": 5.2194, "cout_rack_ppl": 30.0, "duree_amort_rack": 12,
-    "cout_secu_lump": 12.0, "duree_amort_secu": 10,
-    "cout_cablage_lump": 10.5, "duree_amort_cable": 5,
-    "taux_taxe_communale": 0.105, "taux_charge_locative": 0.02,
+    "taux_utilisation": 95.0,
+    "loyer_m2_mois": 5.22, "taxe_communale": 10.5, "charge_locative": 2.0,
+    "cout_rack_ppl": 30.0, "amort_rack": 12,
+    "cout_secu_m2": 12.0, "amort_secu": 10,
+    "cout_cable_m2": 10.5, "amort_cable": 5,
+    # Personnel ETP
     "fte_cariste": 3.30, "fte_chargeur": 1.57, "fte_dechargeur": 0.85,
-    "fte_ctrl_reception": 0.50, "fte_prep_cmd": 0.00,
-    "fte_coord_equipe": 0.00, "fte_chef_equipe": 0.00,
-    "fte_admin_reception": 1.00, "fte_admin_expedition": 0.00,
-    "fte_service_client": 0.00, "fte_resp_entrepot": 0.00,
-    "salaire_operationnel": 13829, "salaire_admin": 18628,
-    "qt_fast_mover": 2.79, "qt_reach_truck_gt8m": 3.42,
-    "qt_reach_truck_lte8m": 0.00, "qt_transpalette": 0.00,
-    "qt_chariot_frontal": 0.00, "qt_prep_horiz": 0.00,
-    "qt_allee_etroite": 0.00, "qt_balayeuse": 0.00,
-    "prix_fast_mover": 10606, "prix_reach_gt8m": 44619,
-    "prix_reach_lte8m": 31089, "prix_transpalette": 375,
-    "prix_chariot_frontal": 22644, "prix_prep_horiz": 11956,
-    "prix_allee_etroite": 95000, "prix_balayeuse": 24990,
-    "emplacements_vendus": 4000, "vol_entrees_palettes": 70720,
-    "vol_sorties_palettes": 70720, "vol_livraisons": 0,
-    "vol_sorties_cmd": 0, "vol_chargements": 0,
-    "vol_palettes_chargees": 0, "vol_vrac_entree": 0, "vol_vrac_sortie": 0,
-    "prod_dechargement_h": 37.63, "prod_mise_en_stock_h": 34.02,
-    "prod_prelevement_h": 27.69, "prod_chargement_h": 32.19,
-    "cout_it_annuel": 2182,
-    "tarif_reel_stockage_mois": 6.58,
-    "tarif_reel_entree_palette": 2.562,
-    "tarif_reel_sortie_palette": 2.929,
-    "ca_reel_total": 704163.52, "cout_reel_total": 643522.45,
-    "profit_reel": 60641.07, "marge_reelle": 0.0861,
+    "fte_ctrl": 0.50, "fte_picker": 0.0, "fte_coord": 0.0, "fte_chef": 0.0,
+    "fte_admin_in": 1.0, "fte_admin_out": 0.0, "fte_svc_client": 0.0, "fte_resp": 0.0,
+    "sal_op": 13829, "sal_adm": 18628,
+    # Engins
+    "qt_fm": 2.79, "prix_fm": 10606,
+    "qt_rt8": 3.42, "prix_rt8": 44619,
+    "qt_rt8m": 0.0, "prix_rt8m": 31089,
+    "qt_tp": 0.0,  "prix_tp": 375,
+    "qt_cf": 0.0,  "prix_cf": 22644,
+    "qt_ph": 0.0,  "prix_ph": 11956,
+    "qt_ae": 0.0,  "prix_ae": 95000,
+    "qt_bal": 0.0, "prix_bal": 24990,
+    # Volumes
+    "empl_vendus": 4000,
+    "vol_in_pal": 70720, "vol_out_pal": 70720,
+    "vol_in_livr": 0, "vol_out_cmd": 0,
+    "vol_charg_cam": 0, "vol_charg_pal": 0,
+    "cout_it": 2182,
+    # Productivités (pal/h productif)
+    "prod_dech": 37.63, "prod_stock": 34.02,
+    "prod_prel": 27.69, "prod_charg": 32.19,
+    # Tarifs réels OCP
+    "tarif_stock_mois": 6.58, "tarif_in": 2.562, "tarif_out": 2.929,
+    "ca_reel": 704163.52, "cout_reel": 643522.45,
+    "profit_reel": 60641.07, "marge_reelle": 8.61,
 }
 
 VIERGE = deepcopy(OCP)
-for k in ["projet","chef_projet","agence","pays","wms"]:
-    VIERGE[k] = ""
-for k in ["surface_m2","emplacements_brut","loyer_m2_mois",
-          "vol_entrees_palettes","vol_sorties_palettes","emplacements_vendus"]:
-    VIERGE[k] = 0.0
-for k in ["fte_cariste","fte_chargeur","fte_dechargeur","fte_ctrl_reception",
-          "fte_prep_cmd","fte_coord_equipe","fte_chef_equipe",
-          "fte_admin_reception","fte_admin_expedition","fte_service_client","fte_resp_entrepot"]:
-    VIERGE[k] = 0.0
-for k in ["qt_fast_mover","qt_reach_truck_gt8m","qt_reach_truck_lte8m","qt_transpalette",
-          "qt_chariot_frontal","qt_prep_horiz","qt_allee_etroite","qt_balayeuse"]:
-    VIERGE[k] = 0.0
-VIERGE["cout_it_annuel"] = 0
+for k in ["projet","chef_projet","agence","pays","wms"]: VIERGE[k] = ""
+for k in ["surface_m2","emplacements_brut","loyer_m2_mois","vol_in_pal","vol_out_pal","empl_vendus"]: VIERGE[k] = 0.0
+for k in ["fte_cariste","fte_chargeur","fte_dechargeur","fte_ctrl","fte_picker",
+          "fte_coord","fte_chef","fte_admin_in","fte_admin_out","fte_svc_client","fte_resp"]: VIERGE[k] = 0.0
+for k in ["qt_fm","qt_rt8","qt_rt8m","qt_tp","qt_cf","qt_ph","qt_ae","qt_bal"]: VIERGE[k] = 0.0
+VIERGE["cout_it"] = 0
 
 def init():
-    if "d" not in st.session_state:
-        st.session_state.d = deepcopy(OCP)
-    if "step" not in st.session_state:
-        st.session_state.step = 1
-    if "preset" not in st.session_state:
-        st.session_state.preset = "ocp"
+    if "d"      not in st.session_state: st.session_state.d = deepcopy(OCP)
+    if "step"   not in st.session_state: st.session_state.step = 1
+    if "preset" not in st.session_state: st.session_state.preset = "ocp"
 
 init()
 d = st.session_state.d
 
-# ── MOTEUR DE CALCUL ──────────────────────────────────────
-def calculer(d):
+# ── CALCUL ───────────────────────────────────────────────
+def calc(d):
     r = {}
-    empl_nets = round(d["emplacements_brut"] * d["taux_utilisation"])
+    # Entrepôt
+    empl_nets = round(d["emplacements_brut"] * d["taux_utilisation"] / 100)
     r["empl_nets"] = empl_nets
-    r["volume_m3"] = d["surface_m2"] * d["hauteur_m"]
-    loyer_an = d["loyer_m2_mois"] * 12 * d["surface_m2"]
-    loyer_total = loyer_an * (1 + d["taux_charge_locative"] + d["taux_taxe_communale"])
-    r["loyer_an"] = loyer_an
-    r["loyer_total"] = loyer_total
-    invest_rack = d["cout_rack_ppl"] * d["emplacements_brut"]
-    cout_rack_an = invest_rack * (d["taux_interet"] + 1 / max(d["duree_amort_rack"], 1))
-    r["cout_rack_an"] = cout_rack_an
-    invest_secu = d["cout_secu_lump"] * d["surface_m2"]
-    cout_secu_an = invest_secu * (d["taux_interet"] + 1 / max(d["duree_amort_secu"], 1))
-    r["cout_secu_an"] = cout_secu_an
-    invest_cable = d["cout_cablage_lump"] * d["surface_m2"]
-    cout_cable_an = invest_cable * (d["taux_interet"] + 1 / max(d["duree_amort_cable"], 1))
-    r["cout_cable_an"] = cout_cable_an
-    cout_entrepot = loyer_total + cout_rack_an + cout_secu_an + cout_cable_an
-    r["cout_entrepot"] = cout_entrepot
+    ti = d["taux_interet"] / 100
+    loyer = d["loyer_m2_mois"] * 12 * d["surface_m2"]
+    loyer_tot = loyer * (1 + d["taxe_communale"]/100 + d["charge_locative"]/100)
+    rack_an  = d["cout_rack_ppl"] * d["emplacements_brut"] * (ti + 1/max(d["amort_rack"],1))
+    secu_an  = d["cout_secu_m2"] * d["surface_m2"] * (ti + 1/max(d["amort_secu"],1))
+    cable_an = d["cout_cable_m2"] * d["surface_m2"] * (ti + 1/max(d["amort_cable"],1))
+    cout_wh = loyer_tot + rack_an + secu_an + cable_an
+    r.update({"loyer_tot": loyer_tot, "rack_an": rack_an, "secu_an": secu_an,
+               "cable_an": cable_an, "cout_wh": cout_wh})
 
-    TAUX_CH = 0.333
-    pers = {
-        "Cariste":             d["fte_cariste"]          * d["salaire_operationnel"] * (1 + TAUX_CH),
-        "Chargeur":            d["fte_chargeur"]          * d["salaire_operationnel"] * (1 + TAUX_CH),
-        "Déchargeur":          d["fte_dechargeur"]        * d["salaire_operationnel"] * (1 + TAUX_CH),
-        "Ctrl réception":      d["fte_ctrl_reception"]    * d["salaire_operationnel"] * (1 + TAUX_CH),
-        "Préparateur cmd":     d["fte_prep_cmd"]          * d["salaire_operationnel"] * (1 + TAUX_CH),
-        "Coordinateur":        d["fte_coord_equipe"]      * d["salaire_admin"]        * (1 + TAUX_CH),
-        "Chef équipe":         d["fte_chef_equipe"]       * d["salaire_admin"]        * (1 + TAUX_CH),
-        "Admin réception":     d["fte_admin_reception"]   * d["salaire_admin"]        * (1 + TAUX_CH),
-        "Admin expédition":    d["fte_admin_expedition"]  * d["salaire_admin"]        * (1 + TAUX_CH),
-        "Service client":      d["fte_service_client"]    * d["salaire_admin"]        * (1 + TAUX_CH),
-        "Resp. entrepôt":      d["fte_resp_entrepot"]     * d["salaire_admin"]        * (1 + TAUX_CH),
-    }
-    cout_pers_total = sum(pers.values())
-    fte_op  = (d["fte_cariste"] + d["fte_chargeur"] + d["fte_dechargeur"] +
-               d["fte_ctrl_reception"] + d["fte_prep_cmd"])
-    fte_adm = (d["fte_admin_reception"] + d["fte_admin_expedition"] +
-               d["fte_service_client"] + d["fte_coord_equipe"] +
-               d["fte_chef_equipe"] + d["fte_resp_entrepot"])
-    cout_pers_op  = pers["Cariste"] + pers["Chargeur"] + pers["Déchargeur"] + pers["Ctrl réception"] + pers["Préparateur cmd"]
-    cout_pers_adm = cout_pers_total - cout_pers_op
-    r["pers"] = pers
-    r["cout_pers_total"] = cout_pers_total
-    r["cout_pers_op"]    = cout_pers_op
-    r["cout_pers_adm"]   = cout_pers_adm
-    r["fte_total"]       = fte_op + fte_adm
-    r["fte_op"]          = fte_op
-    r["fte_adm"]         = fte_adm
+    # Personnel
+    TC = 0.333
+    pers_op  = (d["fte_cariste"] + d["fte_chargeur"] + d["fte_dechargeur"] +
+                d["fte_ctrl"] + d["fte_picker"]) * d["sal_op"] * (1+TC)
+    pers_adm = (d["fte_admin_in"] + d["fte_admin_out"] + d["fte_svc_client"] +
+                d["fte_coord"] + d["fte_chef"] + d["fte_resp"]) * d["sal_adm"] * (1+TC)
+    pers_tot = pers_op + pers_adm
+    fte_op   = d["fte_cariste"]+d["fte_chargeur"]+d["fte_dechargeur"]+d["fte_ctrl"]+d["fte_picker"]
+    fte_adm  = d["fte_admin_in"]+d["fte_admin_out"]+d["fte_svc_client"]+d["fte_coord"]+d["fte_chef"]+d["fte_resp"]
+    r.update({"pers_op": pers_op, "pers_adm": pers_adm, "pers_tot": pers_tot,
+               "fte_op": fte_op, "fte_adm": fte_adm, "fte_tot": fte_op+fte_adm})
 
-    engins = {
-        "Fast Mover":           d["qt_fast_mover"]        * d["prix_fast_mover"],
-        "Reach Truck >8m":      d["qt_reach_truck_gt8m"]  * d["prix_reach_gt8m"],
-        "Reach Truck ≤8m":      d["qt_reach_truck_lte8m"] * d["prix_reach_lte8m"],
-        "Transpalette":         d["qt_transpalette"]       * d["prix_transpalette"],
-        "Chariot frontal":      d["qt_chariot_frontal"]    * d["prix_chariot_frontal"],
-        "Préparateur horiz.":   d["qt_prep_horiz"]         * d["prix_prep_horiz"],
-        "Allée étroite":        d["qt_allee_etroite"]      * d["prix_allee_etroite"],
-        "Balayeuse":            d["qt_balayeuse"]          * d["prix_balayeuse"],
-    }
-    cout_engins = sum(engins.values())
-    r["engins"] = engins
-    r["cout_engins"] = cout_engins
-    r["qt_engins_total"] = sum([d["qt_fast_mover"], d["qt_reach_truck_gt8m"], d["qt_reach_truck_lte8m"],
-                                 d["qt_transpalette"], d["qt_chariot_frontal"], d["qt_prep_horiz"],
-                                 d["qt_allee_etroite"], d["qt_balayeuse"]])
+    # Engins
+    engins_cout = (d["qt_fm"]*d["prix_fm"] + d["qt_rt8"]*d["prix_rt8"] +
+                   d["qt_rt8m"]*d["prix_rt8m"] + d["qt_tp"]*d["prix_tp"] +
+                   d["qt_cf"]*d["prix_cf"] + d["qt_ph"]*d["prix_ph"] +
+                   d["qt_ae"]*d["prix_ae"] + d["qt_bal"]*d["prix_bal"])
+    r["engins_cout"] = engins_cout
+    r["engins_qt"]   = d["qt_fm"]+d["qt_rt8"]+d["qt_rt8m"]+d["qt_tp"]+d["qt_cf"]+d["qt_ph"]+d["qt_ae"]+d["qt_bal"]
 
-    cout_wms_alloc = (cout_pers_op + cout_engins) * d["alloc_wms"]
-    cout_it_total  = d["cout_it_annuel"] + cout_wms_alloc
-    r["cout_wms_alloc"] = cout_wms_alloc
-    r["cout_it_total"]  = cout_it_total
+    # IT
+    wms_alloc = (pers_op + engins_cout) * d["alloc_wms"]/100
+    it_tot    = d["cout_it"] + wms_alloc
+    r.update({"wms_alloc": wms_alloc, "it_tot": it_tot})
 
-    cout_total = cout_entrepot + cout_pers_total + cout_engins + cout_it_total
-    r["cout_total"] = cout_total
+    # Total coûts
+    cout_tot = cout_wh + pers_tot + engins_cout + it_tot
+    r["cout_tot"] = cout_tot
 
-    vol_in  = max(d["vol_entrees_palettes"], 1)
-    vol_out = max(d["vol_sorties_palettes"], 1)
-    vol_tot = vol_in + vol_out
-    share_in  = vol_in  / vol_tot
-    share_out = vol_out / vol_tot
-    cout_proc_in  = (cout_pers_op + cout_engins) * share_in
-    cout_proc_out = (cout_pers_op + cout_engins) * share_out
-    r["cout_proc_in"]  = cout_proc_in
-    r["cout_proc_out"] = cout_proc_out
-    r["cu_entree"]     = cout_proc_in  / vol_in
-    r["cu_sortie"]     = cout_proc_out / vol_out
+    # Coûts unitaires
+    v_in  = max(d["vol_in_pal"], 1)
+    v_out = max(d["vol_out_pal"], 1)
+    v_tot = v_in + v_out
+    proc_in  = (pers_op + engins_cout) * v_in  / v_tot
+    proc_out = (pers_op + engins_cout) * v_out / v_tot
+    cu_in    = proc_in  / v_in
+    cu_out   = proc_out / v_out
+    cu_stock = cout_wh / 12 / max(d["empl_vendus"], 1)
+    r.update({"proc_in": proc_in, "proc_out": proc_out,
+               "cu_in": cu_in, "cu_out": cu_out, "cu_stock": cu_stock})
 
-    empl_v = max(d["emplacements_vendus"], 1)
-    r["cu_stockage_mois"] = cout_entrepot / 12 / empl_v
+    # Tarifs recommandés
+    m = d["marge_cible"] / 100
+    r["prix_stock"]  = cu_stock / (1-m) if m < 1 else 0
+    r["prix_in"]     = cu_in    / (1-m) if m < 1 else 0
+    r["prix_out"]    = cu_out   / (1-m) if m < 1 else 0
+    r["prix_stock_an"] = r["prix_stock"] * 12
 
-    m = d["marge_cible"]
-    r["prix_stockage_mois"]  = r["cu_stockage_mois"] / (1 - m) if m < 1 else 0
-    r["prix_stockage_an"]    = r["prix_stockage_mois"] * 12
-    r["prix_entree_palette"] = r["cu_entree"]        / (1 - m) if m < 1 else 0
-    r["prix_sortie_palette"] = r["cu_sortie"]        / (1 - m) if m < 1 else 0
-    r["prix_entree_min"]     = r["cu_entree"]
-    r["prix_sortie_min"]     = r["cu_sortie"]
-    r["prix_stockage_min"]   = r["cu_stockage_mois"]
+    # CA & résultat
+    ca_s = d["empl_vendus"] * r["prix_stock"] * 12
+    ca_i = d["vol_in_pal"]  * r["prix_in"]
+    ca_o = d["vol_out_pal"] * r["prix_out"]
+    ca   = ca_s + ca_i + ca_o
+    profit = ca - cout_tot
+    r.update({"ca_s": ca_s, "ca_i": ca_i, "ca_o": ca_o,
+               "ca": ca, "profit": profit,
+               "marge": profit/ca*100 if ca > 0 else 0})
 
-    ca_s = d["emplacements_vendus"] * r["prix_stockage_mois"] * 12
-    ca_i = d["vol_entrees_palettes"] * r["prix_entree_palette"]
-    ca_o = d["vol_sorties_palettes"] * r["prix_sortie_palette"]
-    ca_total = ca_s + ca_i + ca_o
-    profit   = ca_total - cout_total
-    r["ca_stockage"] = ca_s
-    r["ca_in"]       = ca_i
-    r["ca_out"]      = ca_o
-    r["ca_total"]    = ca_total
-    r["profit"]      = profit
-    r["marge_calc"]  = profit / ca_total if ca_total > 0 else 0
-
-    ca_vp10 = (ca_s + d["vol_entrees_palettes"]*1.1*r["prix_entree_palette"] + d["vol_sorties_palettes"]*1.1*r["prix_sortie_palette"])
-    ca_vm10 = (ca_s + d["vol_entrees_palettes"]*0.9*r["prix_entree_palette"] + d["vol_sorties_palettes"]*0.9*r["prix_sortie_palette"])
-    r["profit_vol_p10"] = ca_vp10 - cout_total
-    r["profit_vol_m10"] = ca_vm10 - cout_total
-    r["marge_vol_p10"]  = r["profit_vol_p10"] / ca_vp10 if ca_vp10 > 0 else 0
-    r["marge_vol_m10"]  = r["profit_vol_m10"] / ca_vm10 if ca_vm10 > 0 else 0
-
-    couts_fixes = cout_entrepot + cout_pers_adm + cout_it_total
-    taux_mv = (ca_i + ca_o - cout_pers_op - cout_engins) / (ca_i + ca_o) if (ca_i + ca_o) > 0 else 0
-    r["seuil_rentabilite"] = couts_fixes / taux_mv if taux_mv > 0 else 0
-    r["couts_fixes"] = couts_fixes
+    # Seuil
+    couts_fixes = cout_wh + pers_adm + it_tot
+    tmv = (ca_i+ca_o - pers_op - engins_cout) / (ca_i+ca_o) if (ca_i+ca_o) > 0 else 0
+    r["seuil"] = couts_fixes / tmv if tmv > 0 else 0
     return r
 
 # ── SIDEBAR ──────────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
-    <div style='text-align:center;padding:14px 0 10px;'>
-      <div style='font-size:28px;'>📦</div>
-      <div style='font-size:15px;font-weight:800;color:#e8eaf6;'>Polka Wizard v2</div>
-      <div style='font-size:11px;color:#7b82a8;'>Contract Logistics · Dachser</div>
+    <div style='text-align:center;padding:16px 0 10px;'>
+      <div style='font-size:32px;'>📦</div>
+      <div style='font-size:16px;font-weight:800;color:#e8eaf6;'>Polka Wizard v3</div>
+      <div style='font-size:11px;color:#7986cb;'>Contract Logistics · Dachser</div>
     </div>""", unsafe_allow_html=True)
     st.divider()
 
-    preset = st.radio("🗂️ Jeu de données", ["OCP Morocco (réel)", "Nouveau projet (vierge)"])
+    preset = st.radio("🗂️ Jeu de données",
+                      ["OCP Morocco (réel)", "Nouveau projet (vierge)"],
+                      key="preset_radio")
     if preset == "OCP Morocco (réel)" and st.session_state.preset != "ocp":
         st.session_state.d = deepcopy(OCP); st.session_state.preset = "ocp"; st.rerun()
     elif preset == "Nouveau projet (vierge)" and st.session_state.preset != "vierge":
         st.session_state.d = deepcopy(VIERGE); st.session_state.preset = "vierge"; st.rerun()
 
     st.divider()
-    STEPS = [(1,"🏭 Projet & Entrepôt"),(2,"⚙️ Paramètres Polka"),
-             (3,"👷 Personnel"),(4,"🏗️ Engins"),(5,"📊 Volumes"),
-             (6,"💶 Calcul Tarifs"),(7,"📉 Sensibilité")]
-    for num, label in STEPS:
+    STEPS = [(1,"🏭","Projet & Entrepôt"),(2,"⚙️","Paramètres"),
+             (3,"👷","Personnel"),(4,"🏗️","Engins"),
+             (5,"📊","Volumes"),(6,"🔀","Processus"),
+             (7,"💶","Tarifs"),(8,"📉","Sensibilité")]
+    for num, icon, label in STEPS:
         active = st.session_state.step == num
-        col = "#4f7cff" if active else "#55597a"
-        bg  = "rgba(79,124,255,0.12)" if active else "transparent"
-        st.markdown(f"""<div style='padding:7px 10px;border-radius:7px;background:{bg};
-            border-left:3px solid {col};margin:3px 0;'>
-            <span style='color:{col};font-weight:{"700" if active else "400"};font-size:12px;'>{label}</span></div>""",
+        bg  = "#2952d9" if active else "transparent"
+        col = "white"  if active else "#9fa8da"
+        fw  = "700"    if active else "400"
+        st.markdown(f"""<div style='padding:8px 12px;border-radius:8px;background:{bg};margin:2px 0;'>
+            <span style='color:{col};font-weight:{fw};font-size:13px;'>{icon} {label}</span></div>""",
             unsafe_allow_html=True)
-        if st.button(f"{label}", key=f"nb_{num}", use_container_width=True,
+        if st.button(f"{icon} {label}", key=f"nav_{num}", use_container_width=True,
                      type="primary" if active else "secondary"):
             st.session_state.step = num; st.rerun()
 
     st.divider()
     try:
-        res = calculer(st.session_state.d)
-        mc = "#22d3a0" if res["marge_calc"] >= d["marge_cible"] else "#ff5c6a"
-        st.markdown(f"""<div style='font-size:12px;'>
-          <div style='display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #252840;'>
-            <span style='color:#7b82a8;'>CA estimé</span><span style='color:#4f7cff;font-weight:700;'>{res['ca_total']:,.0f} €</span></div>
-          <div style='display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #252840;'>
-            <span style='color:#7b82a8;'>Coûts</span><span style='color:#ffb547;font-weight:700;'>{res['cout_total']:,.0f} €</span></div>
+        r = calc(st.session_state.d)
+        mc = "#4ade80" if r["marge"] >= d["marge_cible"] else "#f87171"
+        st.markdown(f"""<div style='font-size:12px;color:#c5cae9;'>
+          <div style='display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #2a3060;'>
+            <span>CA estimé</span><span style='color:#818cf8;font-weight:700;'>{r['ca']:,.0f} €</span></div>
+          <div style='display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #2a3060;'>
+            <span>Coûts</span><span style='color:#fbbf24;font-weight:700;'>{r['cout_tot']:,.0f} €</span></div>
           <div style='display:flex;justify-content:space-between;padding:4px 0;'>
-            <span style='color:#7b82a8;'>Marge</span><span style='color:{mc};font-weight:700;'>{res['marge_calc']:.2%}</span></div>
+            <span>Marge</span><span style='color:{mc};font-weight:700;'>{r['marge']:.2f}%</span></div>
         </div>""", unsafe_allow_html=True)
     except: pass
 
+# ── HELPERS ──────────────────────────────────────────────
 def hdr(num, icon, title, desc):
     st.markdown(f"""<div class='step-hdr'>
-      <div class='step-num'>ÉTAPE {num} / 7</div>
-      <div class='step-title'>{icon} {title}</div>
-      <div class='step-desc'>{desc}</div></div>""", unsafe_allow_html=True)
+      <div class='step-num'>ÉTAPE {num} / 8</div>
+      <div class='step-ttl'>{icon} {title}</div>
+      <div class='step-dsc'>{desc}</div></div>""", unsafe_allow_html=True)
 
-def help_box(txt):
+def info(txt):
     st.markdown(f"<div class='help-box'>ℹ️ {txt}</div>", unsafe_allow_html=True)
+
+def ok(txt):   st.markdown(f"<div class='alert-ok'>✅ {txt}</div>",   unsafe_allow_html=True)
+def warn(txt): st.markdown(f"<div class='alert-warn'>⚠️ {txt}</div>", unsafe_allow_html=True)
+def hint(txt): st.markdown(f"<div class='alert-info'>💡 {txt}</div>", unsafe_allow_html=True)
 
 def nav(step):
     c1, _, c3 = st.columns([1,5,1])
     with c1:
-        if step > 1 and st.button("← Retour", use_container_width=True):
-            st.session_state.step = step - 1; st.rerun()
+        if step > 1 and st.button("← Retour", use_container_width=True, key=f"back_{step}"):
+            st.session_state.step = step-1; st.rerun()
     with c3:
-        lbl = "Suivant →" if step < 7 else "🔄 Recommencer"
-        if st.button(lbl, type="primary", use_container_width=True):
-            st.session_state.step = (step + 1) if step < 7 else 1; st.rerun()
+        lbl = "Suivant →" if step < 8 else "🔄 Début"
+        if st.button(lbl, type="primary", use_container_width=True, key=f"next_{step}"):
+            st.session_state.step = (step+1) if step < 8 else 1; st.rerun()
+
+def num(label, val, mn=0.0, mx=999999.0, step=1.0, key=None, help=None, fmt="%.2f"):
+    """Wrapper number_input sans format spécial pour éviter bug sprintf"""
+    return st.number_input(label, min_value=float(mn), max_value=float(mx),
+                           value=float(val), step=float(step), key=key, help=help)
+
+def num_int(label, val, mn=0, mx=999999, step=1, key=None, help=None):
+    return st.number_input(label, min_value=int(mn), max_value=int(mx),
+                           value=int(val), step=int(step), key=key, help=help)
 
 # ════════════════════════════════════════════════════════
 # ÉTAPE 1 — PROJET & ENTREPÔT
 # ════════════════════════════════════════════════════════
 if st.session_state.step == 1:
-    hdr(1, "🏭", "Données Projet & Entrepôt",
-        "Informations du contrat et caractéristiques physiques du site logistique.")
+    hdr(1,"🏭","Projet & Entrepôt","Informations du contrat et caractéristiques physiques du site.")
 
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("<div class='sec-title'>🏢 Identification du projet</div>", unsafe_allow_html=True)
-        help_box("""Correspond à l'onglet <strong>Branch's Basic Data</strong> du fichier Polka.
-        Ces données identifient le client, le site Dachser et l'équipe en charge du contrat.""")
-        d["projet"]      = st.text_input("Nom du projet / Client", value=d["projet"], help="Nom commercial du client · ex : OCP, Renault…")
+        st.markdown("<div class='sec'>🏢 Identification du projet</div>", unsafe_allow_html=True)
+        info("Onglet <strong>Branch's Basic Data</strong> · Ces champs identifient le client et le site Dachser.")
+        d["projet"]      = st.text_input("Client / Projet", value=d["projet"])
         d["chef_projet"] = st.text_input("Chef de projet", value=d["chef_projet"])
-        d["agence"]      = st.text_input("Agence / Site Dachser", value=d["agence"], help="Code agence · ex : MA-Mohammedia (580)")
+        d["agence"]      = st.text_input("Agence Dachser", value=d["agence"], help="Ex: MA-Mohammedia (580)")
         d["pays"]        = st.text_input("Pays", value=d["pays"])
-        d["wms"]         = st.text_input("Système WMS", value=d["wms"], help="WMS utilisé sur site · OCP = MIKADO")
+        d["wms"]         = st.text_input("WMS utilisé", value=d["wms"], help="OCP = MIKADO")
 
-        st.markdown("<div class='sec-title'>📐 Dimensions de l'entrepôt</div>", unsafe_allow_html=True)
-        help_box("""Données issues des onglets <strong>Warehouse</strong> et <strong>Key figures</strong>.
-        <br><strong>OCP WH0010 :</strong> 4 040 m² · hauteur 10 m · 4 211 emplacements bruts · 95% utilisation → 4 000 empl. nets.
-        <br>Le taux d'utilisation reflète la déduction de la réserve opérationnelle (zones tampon, couloirs).""")
-        d["surface_m2"]         = st.number_input("Surface nette (m²)", min_value=0.0, value=float(d["surface_m2"]), step=50.0,
-                                      help="Surface de stockage hors bureaux · OCP = 4 039,74 m²")
-        d["hauteur_m"]          = st.number_input("Hauteur utile (m)", min_value=3.0, max_value=30.0, value=float(d["hauteur_m"]), step=0.5,
-                                      help="Hauteur libre sous poutre · OCP = 10 m → nécessite Reach Truck >8m")
-        d["emplacements_brut"]  = st.number_input("Emplacements palettes (brut)", min_value=0, value=int(d["emplacements_brut"]), step=10,
-                                      help="Nombre total d'emplacements dans les racks · OCP = 4 211")
-        d["taux_utilisation"]   = st.slider("Taux d'utilisation cible", min_value=0.5, max_value=1.0,
-                                      value=float(d["taux_utilisation"]), step=0.01, format="%.0%",
-                                      help="OCP = 95% · Polka déduit 10% de réserve op. → 4 211 × 95% = 4 000 empl. nets")
-        empl_nets = int(d["emplacements_brut"] * d["taux_utilisation"])
+        st.markdown("<div class='sec'>📐 Dimensions</div>", unsafe_allow_html=True)
+        info("Onglet <strong>Key figures / Warehouse</strong> · OCP WH0010 : 4 040 m² · 10 m · 4 211 emplacements · 95% utilisation → 4 000 nets")
+        d["surface_m2"]        = num("Surface nette (m²)", d["surface_m2"], step=50.0, key="s_m2", help="Hors bureaux · OCP = 4 039,74 m²")
+        d["hauteur_m"]         = num("Hauteur utile (m)", d["hauteur_m"], mn=3.0, mx=30.0, step=0.5, key="haut", help="Hauteur libre sous poutre · OCP = 10 m")
+        d["emplacements_brut"] = num_int("Emplacements palettes (brut)", d["emplacements_brut"], step=10, key="empl_b", help="OCP = 4 211 emplacements")
+        d["taux_utilisation"]  = num("Taux d'utilisation (%)", d["taux_utilisation"], mn=50.0, mx=100.0, step=1.0, key="taux_u", help="OCP = 95% → 4 000 empl. nets")
+
+        empl_nets = round(d["emplacements_brut"] * d["taux_utilisation"] / 100)
         vol = d["surface_m2"] * d["hauteur_m"]
-        st.markdown(f"""<div class='res-card'><div style='display:flex;gap:20px;flex-wrap:wrap;'>
-          <div><div class='res-label'>Emplacements nets</div><div class='res-blue'>{empl_nets:,}</div></div>
-          <div><div class='res-label'>Volume m³</div><div class='res-blue'>{vol:,.0f}</div></div>
-          <div><div class='res-label'>Densité</div><div class='res-blue'>{d["emplacements_brut"]/max(d["surface_m2"],1):.2f} pal/m²</div></div>
-        </div></div>""", unsafe_allow_html=True)
+        densite = d["emplacements_brut"] / max(d["surface_m2"], 1)
+        st.markdown(f"""<div class='kpi-row'>
+          <div class='kpi'><div class='kpi-lbl'>Emplacements nets</div><div class='kpi-val blue'>{empl_nets:,}</div></div>
+          <div class='kpi'><div class='kpi-lbl'>Volume m³</div><div class='kpi-val blue'>{vol:,.0f}</div></div>
+          <div class='kpi'><div class='kpi-lbl'>Densité</div><div class='kpi-val blue'>{densite:.2f} pal/m²</div></div>
+        </div>""", unsafe_allow_html=True)
 
     with col2:
-        st.markdown("<div class='sec-title'>💰 Coûts immobiliers</div>", unsafe_allow_html=True)
-        help_box("""Données de l'onglet <strong>Warehouse Costs</strong> + notes OCP locales dans <strong>Warehouse</strong>.
-        <br>Le loyer OCP est calculé depuis le MAD (1 MAD = 0,0922 € au 12/02/2026).
-        <br>Prix m² brut MAD = 56,58 MAD/m²/mois → 5,22 €/m²/mois.
-        <br>Taxes Maroc spécifiques : taxe communale 10,5% + charges locatives 2%.""")
-        d["loyer_m2_mois"]         = st.number_input("Loyer / m² / mois (€)", min_value=0.0, value=float(d["loyer_m2_mois"]), step=0.1, format="%.4f",
-                                          help="OCP = 5,2194 €/m²/mois (56,58 MAD × 0,0922)")
-        d["taux_taxe_communale"]   = st.number_input("Taxe communale (%)", min_value=0.0, max_value=0.5, value=float(d["taux_taxe_communale"]), step=0.005, format="%.3f",
-                                          help="Taxe locale sur le bail · OCP Maroc = 10,5% · France = 0%")
-        d["taux_charge_locative"]  = st.number_input("Charges locatives (%)", min_value=0.0, max_value=0.2, value=float(d["taux_charge_locative"]), step=0.005, format="%.3f",
-                                          help="Charges annexes au loyer · OCP = 2% · Très variable selon les baux")
+        st.markdown("<div class='sec'>💰 Loyer & charges</div>", unsafe_allow_html=True)
+        info("""Onglet <strong>Warehouse Costs</strong> · OCP Maroc : loyer = 56,58 MAD/m²/mois (÷ 10,84 = 5,22 €).
+        Taxes spécifiques Maroc : taxe communale 10,5% + charges locatives 2%.""")
+        d["loyer_m2_mois"]   = num("Loyer (€/m²/mois)", d["loyer_m2_mois"], step=0.1, key="loy", help="OCP = 5,22 €/m²/mois")
+        d["taux_change_mad"] = num("Taux de change MAD/€", d["taux_change_mad"], mn=1.0, mx=30.0, step=0.1, key="fx", help="1 € = X MAD · OCP = 10,84 au 12/02/2026")
+        d["taxe_communale"]  = num("Taxe communale (%)", d["taxe_communale"], mn=0.0, mx=50.0, step=0.5, key="tax_com", help="OCP Maroc = 10,5% · France = 0%")
+        d["charge_locative"] = num("Charges locatives (%)", d["charge_locative"], mn=0.0, mx=20.0, step=0.5, key="chg_loc", help="OCP = 2%")
 
-        st.markdown("<div class='sec-title'>🔧 Investissements amortis (formule Polka)</div>", unsafe_allow_html=True)
-        help_box("""Formule Polka pour chaque investissement :
-        <br><code>Annuité = Investissement × (taux_intérêt + 1/durée_amort)</code>
-        <br>Cette formule intègre le coût d'opportunité du capital (taux = 9%) dans l'annuité.
-        <br>Données issues directement de l'onglet <strong>Warehouse Costs</strong> Polka.""")
-        d["cout_rack_ppl"]      = st.number_input("Coût racks / emplacement (€ achat)", min_value=0.0, value=float(d["cout_rack_ppl"]), step=1.0,
-                                      help="Racking System PPL · OCP Polka = 30 €/emplacement")
-        d["duree_amort_rack"]   = st.number_input("Amortissement racks (années)", min_value=1, max_value=30, value=int(d["duree_amort_rack"]),
-                                      help="Polka standard = 12 ans")
-        d["cout_secu_lump"]     = st.number_input("Sécurité / vidéo (€/m²)", min_value=0.0, value=float(d["cout_secu_lump"]), step=0.5,
-                                      help="Safety/Security Lump Sum · OCP Polka = 12 €/m²")
-        d["duree_amort_secu"]   = st.number_input("Amortissement sécurité (années)", min_value=1, max_value=20, value=int(d["duree_amort_secu"]),
-                                      help="Polka = 10 ans")
-        d["cout_cablage_lump"]  = st.number_input("Câblage réseau (€/m²)", min_value=0.0, value=float(d["cout_cablage_lump"]), step=0.5,
-                                      help="Cabling Lump Sum · OCP Polka = 10,5 €/m²")
-        d["duree_amort_cable"]  = st.number_input("Amortissement câblage (années)", min_value=1, max_value=15, value=int(d["duree_amort_cable"]),
-                                      help="Polka = 5 ans")
+        st.markdown("<div class='sec'>🔧 Investissements amortis</div>", unsafe_allow_html=True)
+        info("""Formule Polka : <strong>Annuité = Investissement × (taux_intérêt + 1/durée)</strong>
+        Onglet <strong>Warehouse Costs</strong> : Racking PPL · Safety/Security · Cabling.""")
 
-        loyer_t = d["loyer_m2_mois"] * 12 * d["surface_m2"] * (1 + d["taux_taxe_communale"] + d["taux_charge_locative"])
-        rack_a  = d["cout_rack_ppl"] * d["emplacements_brut"] * (d["taux_interet"] + 1/max(d["duree_amort_rack"],1))
-        st.markdown(f"""<div class='res-card'>
-          <div class='res-label'>Estimation coût entrepôt annuel</div>
-          <div class='res-blue'>{loyer_t+rack_a:,.0f} €</div>
-          <div class='res-sub'>Loyer charges incluses : {loyer_t:,.0f} € · Racks : {rack_a:,.0f} €</div>
+        c1i, c2i = st.columns(2)
+        with c1i:
+            d["cout_rack_ppl"] = num("Racks (€/empl.)", d["cout_rack_ppl"], step=1.0, key="rack_p", help="OCP = 30 €/empl.")
+            d["cout_secu_m2"]  = num("Sécurité (€/m²)", d["cout_secu_m2"], step=0.5, key="secu_m", help="OCP = 12 €/m²")
+            d["cout_cable_m2"] = num("Câblage (€/m²)", d["cout_cable_m2"], step=0.5, key="cab_m", help="OCP = 10,5 €/m²")
+        with c2i:
+            d["amort_rack"]  = num_int("Amort. racks (ans)", d["amort_rack"], mn=1, mx=30, key="am_r", help="Polka = 12 ans")
+            d["amort_secu"]  = num_int("Amort. sécu (ans)", d["amort_secu"], mn=1, mx=20, key="am_s", help="Polka = 10 ans")
+            d["amort_cable"] = num_int("Amort. câblage (ans)", d["amort_cable"], mn=1, mx=15, key="am_c", help="Polka = 5 ans")
+
+        r = calc(d)
+        st.markdown(f"""<div class='kpi-row'>
+          <div class='kpi'><div class='kpi-lbl'>Loyer annuel (charges)</div><div class='kpi-val blue'>{r['loyer_tot']:,.0f} €</div></div>
+          <div class='kpi'><div class='kpi-lbl'>Racks + Sécu + Câblage</div><div class='kpi-val orange'>{r['rack_an']+r['secu_an']+r['cable_an']:,.0f} €</div></div>
+          <div class='kpi'><div class='kpi-lbl'>Total entrepôt / an</div><div class='kpi-val blue'>{r['cout_wh']:,.0f} €</div></div>
         </div>""", unsafe_allow_html=True)
+        if st.session_state.preset == "ocp":
+            hint("Coût entrepôt OCP Polka réel = <strong>358 678 €/an</strong>")
     nav(1)
 
 # ════════════════════════════════════════════════════════
-# ÉTAPE 2 — PARAMÈTRES POLKA
+# ÉTAPE 2 — PARAMÈTRES
 # ════════════════════════════════════════════════════════
 elif st.session_state.step == 2:
-    hdr(2, "⚙️", "Paramètres & Hypothèses Polka",
-        "Paramètres financiers et opérationnels pilotant l'ensemble des calculs du modèle.")
-
-    help_box("""Ces paramètres correspondent à l'onglet <strong>Branch's Basic Data</strong> du fichier Polka.
-    Ils s'appliquent à tous les calculs : coûts entrepôt, personnel, engins et tarifs.
-    <strong>Ne les modifier que si le contexte du site le justifie.</strong>""")
+    hdr(2,"⚙️","Paramètres Polka","Hypothèses financières et opérationnelles — onglet Branch's Basic Data.")
+    info("Ces paramètres s'appliquent à <strong>tous les calculs</strong>. Valeurs OCP Polka V202541 pré-remplies.")
 
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("<div class='sec-title'>📅 Paramètres opérationnels</div>", unsafe_allow_html=True)
-        d["jours_ouvres"] = st.number_input("Jours ouvrés / an", min_value=200, max_value=365, value=int(d["jours_ouvres"]),
-                                help="OCP = 272 jours (5j/semaine, hors fériés Maroc) · France standard ≈ 220 jours")
-        d["reserve_op"]   = st.number_input("Réserve opérationnelle (%)", min_value=0.0, max_value=0.3, value=float(d["reserve_op"]), step=0.01, format="%.2f",
-                                help="Déduit des emplacements bruts pour couvrir zones défaillantes/tampons · Polka OCP = 10%")
-        d["taux_panne"]   = st.number_input("Taux de défaillance engins (%)", min_value=0.0, max_value=0.3, value=float(d["taux_panne"]), step=0.01, format="%.2f",
-                                help="% de temps d'arrêt technique des engins · Polka = 5% · Impacte le besoin en engins de substitution")
-        d["batteries_li"] = st.checkbox("Batteries lithium-ion (LI) pour engins électriques", value=bool(d["batteries_li"]),
-                                help="OCP = Oui · Élimine le besoin d'engins de rechange pendant la recharge · Réduit le parc nécessaire")
-        if d["batteries_li"]:
-            st.markdown("<div class='ok'>✓ LI activé — pas de doublement du parc pour la recharge</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sec'>📅 Paramètres opérationnels</div>", unsafe_allow_html=True)
+        d["jours_ouvres"] = num_int("Jours ouvrés / an", d["jours_ouvres"], mn=200, mx=365, key="jours",
+                                    help="OCP = 272 j (5j/sem, hors fériés Maroc) · France ≈ 220 j")
+        d["reserve_op"]   = num("Réserve opérationnelle (%)", d["reserve_op"], mn=0.0, mx=30.0, step=1.0, key="res_op",
+                                 help="Déduit des emplacements bruts (zones tampon/défaillantes) · OCP = 10%")
+        d["taux_panne"]   = num("Taux de défaillance engins (%)", d["taux_panne"], mn=0.0, mx=30.0, step=0.5, key="panne",
+                                 help="% temps d'arrêt technique · Polka = 5%")
+        d["batteries_li"] = st.checkbox("Batteries lithium-ion (LI)", value=bool(d["batteries_li"]),
+                                         help="OCP = Oui · Évite les engins de substitution pendant recharge")
+        if d["batteries_li"]: ok("LI activé — pas de doublement du parc pour recharge")
+        else: warn("Batteries classiques — prévoir engins de substitution")
 
     with col2:
-        st.markdown("<div class='sec-title'>💰 Paramètres financiers</div>", unsafe_allow_html=True)
-        d["taux_interet"] = st.number_input("Taux d'intérêt interne Dachser (%)", min_value=0.0, max_value=0.3, value=float(d["taux_interet"]), step=0.005, format="%.3f",
-                                help="Appliqué dans la formule d'annuité des investissements · Polka Dachser standard = 9%")
-        d["marge_cible"]  = st.slider("🎯 Marge cible (%)", min_value=0.0, max_value=0.30, value=float(d["marge_cible"]), step=0.005, format="%.1%",
-                                help="Objectif de marge nette · Polka = 10% · OCP réel = 8,61% (légèrement sous objectif côté stockage)")
-        d["alloc_wms"]    = st.number_input("Allocation WMS + Innovation Fund (%)", min_value=0.0, max_value=0.10, value=float(d["alloc_wms"]), step=0.001, format="%.3f",
-                                help="% des coûts variables alloué au WMS (MIKADO) et fonds innovation Dachser · Polka = 2,2%")
-
-        st.markdown("<div class='sec-title'>🚚 Primes de risque transport</div>", unsafe_allow_html=True)
-        help_box("Primes appliquées sur les coûts de transport pour couvrir la responsabilité civile marchandises.")
-        d["prime_risque_fret"]  = st.number_input("Prime risque fret - palettes (%)", min_value=0.0, max_value=0.5, value=float(d["prime_risque_fret"]), step=0.01, format="%.2f",
-                                      help="Risk Premium Transport Liability (Freight shipments) · Polka = 15%")
-        d["prime_risque_colis"] = st.number_input("Prime risque colis (%)", min_value=0.0, max_value=0.5, value=float(d["prime_risque_colis"]), step=0.01, format="%.2f",
-                                      help="Risk Premium Transport Liability (Parcel shipments) · Polka = 5%")
+        st.markdown("<div class='sec'>💰 Paramètres financiers</div>", unsafe_allow_html=True)
+        d["taux_interet"] = num("Taux d'intérêt interne (%)", d["taux_interet"], mn=0.0, mx=30.0, step=0.5, key="ti",
+                                 help="Inclus dans l'annuité des investissements · Dachser standard = 9%")
+        d["marge_cible"]  = num("🎯 Marge cible (%)", d["marge_cible"], mn=0.0, mx=30.0, step=0.5, key="marge_c",
+                                 help="Objectif de marge nette du contrat · Polka = 10% · OCP réel = 8,61%")
+        d["alloc_wms"]    = num("Allocation WMS + Innovation Fund (%)", d["alloc_wms"], mn=0.0, mx=10.0, step=0.1, key="wms_a",
+                                 help="% des coûts variables → IT & Innovation Dachser · Polka = 2,2%")
+        st.markdown("<div class='sec'>🚚 Primes transport</div>", unsafe_allow_html=True)
+        d["prime_fret"]   = num("Prime risque fret (%)", d["prime_fret"], mn=0.0, mx=50.0, step=0.5, key="p_fret",
+                                 help="Responsabilité civile marchandises palettes · Polka = 15%")
+        d["prime_colis"]  = num("Prime risque colis (%)", d["prime_colis"], mn=0.0, mx=50.0, step=0.5, key="p_col",
+                                 help="Responsabilité civile marchandises colis · Polka = 5%")
     nav(2)
 
 # ════════════════════════════════════════════════════════
 # ÉTAPE 3 — PERSONNEL
 # ════════════════════════════════════════════════════════
 elif st.session_state.step == 3:
-    hdr(3, "👷", "Cockpit Personnel",
-        "Effectifs ETP par poste et coûts salariaux — onglet Cockpit Personnel de Polka.")
+    hdr(3,"👷","Cockpit Personnel","Effectifs ETP et coûts salariaux — onglet Cockpit Personnel.")
+    info("""Polka calcule les ETP à partir des volumes et productivités (<strong>Prods simplifiées</strong>).
+    Formule : <strong>Coût = ETP × Salaire brut × (1 + 33% charges)</strong>.
+    Admin OCP : 18 628 € brut → 24 819 € total chargé (HO 1,3% + RHO 31,9% inclus).""")
 
-    help_box("""Polka calcule automatiquement les ETP nécessaires à partir des volumes et productivités (<strong>Prods simplifiées</strong>).
-    Les valeurs OCP ci-dessous sont les ETP alloués après arrondi.
-    <br><strong>Formule coût :</strong> ETP × Salaire brut × (1 + taux charges sociales ~33%)
-    <br>Pour les administratifs, Polka ajoute les allocations <strong>HO (1,3%)</strong> et <strong>RHO/RCO (31,9%)</strong> → coût total admin OCP = 24 819 €/ETP/an.""")
+    col1, col2 = st.columns([3, 2])
+    with col1:
+        st.markdown("<div class='sec'>🔵 Logistics Operatives — salaire brut OCP = 13 829 €/an</div>", unsafe_allow_html=True)
+        STAFF_OP = [
+            ("fte_cariste", "🚛 Cariste (Forklift Driver)",
+             "Reach Trucks & Fast Movers · ETP Polka calculé = 3,29 → alloué OCP = 3,30"),
+            ("fte_chargeur", "📦 Chargeur (Loader)",
+             "Chargement camions sortie · ETP = 1,56 → 1,57"),
+            ("fte_dechargeur", "📥 Déchargeur (Unloader)",
+             "Déchargement camions réception · ETP = 0,84 → 0,85"),
+            ("fte_ctrl", "🔍 Contrôleur réception",
+             "Contrôle qualitatif/quantitatif · ETP = 0,49 → 0,50"),
+            ("fte_picker", "🛒 Préparateur commandes (Picker)",
+             "Picking colis · OCP = 0 (pas de picking détail)"),
+        ]
+        for k, lbl, tip in STAFF_OP:
+            c1, c2 = st.columns([2, 1])
+            with c1: d[k] = num(lbl, d[k], mn=0.0, mx=30.0, step=0.01, key=f"op_{k}", help=tip)
+            with c2:
+                cout = d[k] * d["sal_op"] * 1.333
+                st.metric("Coût/an", f"{cout:,.0f} €")
 
-    with st.expander("📈 Productivités mesurées sur site OCP (onglet Prods simplifiées)", expanded=False):
-        help_box("""Ces productivités ont été mesurées et validées sur le site OCP Mohammedia.
-        Elles pilotent le calcul automatique des ETP dans Polka.
-        <br>Taux de charge appliqué : 40% (MUP Polka = 22%, taux site réel = 30%, taux moyen retenu = 40%).""")
-        c1,c2,c3,c4 = st.columns(4)
-        with c1: d["prod_dechargement_h"]  = st.number_input("Déchargement (pal/h prod.)",  value=float(d["prod_dechargement_h"]),  step=1.0, help="ETP calculé Polka = 1,34 · OCP = 37,63 pal/h productive (43,82 pal/h brute)")
-        with c2: d["prod_mise_en_stock_h"] = st.number_input("Mise en stock (pal/h prod.)", value=float(d["prod_mise_en_stock_h"]), step=1.0, help="ETP calculé Polka = 1,48 · OCP = 34,02 pal/h productive")
-        with c3: d["prod_prelevement_h"]   = st.number_input("Prélèvement (pal/h prod.)",   value=float(d["prod_prelevement_h"]),   step=1.0, help="ETP calculé Polka = 1,82 · OCP = 27,69 pal/h productive")
-        with c4: d["prod_chargement_h"]    = st.number_input("Chargement (pal/h prod.)",    value=float(d["prod_chargement_h"]),    step=1.0, help="ETP calculé Polka = 1,56 · OCP = 32,19 pal/h productive")
+        d["sal_op"] = num_int("💶 Salaire brut opérationnel (€/an)", d["sal_op"], mn=0, mx=100000, step=100,
+                               key="sal_op_v", help="OCP = 13 829 €/an · France logistique ≈ 22 000-28 000 €")
 
-    st.markdown("<div class='sec-title'>🔵 Opérationnels — Logistics Operatives (salaire brut = 13 829 €/an OCP)</div>", unsafe_allow_html=True)
-    help_box("Coût chargé estimé ≈ <strong>18 390 €/ETP/an</strong> (salaire 13 829 € × 1,333 charges)")
+        st.markdown("<div class='sec'>🟡 Office Employees — salaire brut OCP = 18 628 €/an</div>", unsafe_allow_html=True)
+        STAFF_ADM = [
+            ("fte_admin_in",  "📋 Admin. réception (Inbound Admin)",  "OCP = 1,00 ETP · Coût total Polka = 24 819 €/an"),
+            ("fte_admin_out", "📤 Admin. expédition",                  "OCP = 0"),
+            ("fte_svc_client","📞 Service client",                     "OCP = 0"),
+            ("fte_coord",     "👥 Coordinateur équipe",                "OCP = 0"),
+            ("fte_chef",      "🔧 Chef d'équipe (Shift Leader)",       "OCP = 0"),
+            ("fte_resp",      "🏆 Responsable entrepôt",               "OCP = 0"),
+        ]
+        for k, lbl, tip in STAFF_ADM:
+            c1, c2 = st.columns([2, 1])
+            with c1: d[k] = num(lbl, d[k], mn=0.0, mx=20.0, step=0.01, key=f"adm_{k}", help=tip)
+            with c2:
+                cout = d[k] * d["sal_adm"] * 1.333
+                st.metric("Coût/an", f"{cout:,.0f} €")
 
-    STAFF_OP = [
-        ("fte_cariste",        "🚛 Cariste\n(Forklift Driver)",
-         "Conduit Reach Trucks et Fast Movers · Mise en stock et prélèvement\nETP calculé Polka = 3,29 → alloué OCP = 3,30"),
-        ("fte_chargeur",       "📦 Chargeur\n(Loader)",
-         "Chargement des camions à la sortie\nETP calculé Polka = 1,56 → alloué OCP = 1,57"),
-        ("fte_dechargeur",     "📥 Déchargeur\n(Unloader)",
-         "Déchargement des camions entrants\nETP calculé Polka = 0,84 → alloué OCP = 0,85"),
-        ("fte_ctrl_reception", "🔍 Contrôleur récep.\n(Inbound Ctrl)",
-         "Contrôle qualitatif et quantitatif des marchandises reçues\nETP calculé Polka = 0,49 → alloué OCP = 0,50"),
-        ("fte_prep_cmd",       "🛒 Prépar. commandes\n(Picker)",
-         "Picking colis et préparation commandes détail\nOCP = 0 ETP (pas de picking colis sur ce site)"),
-    ]
-    cols = st.columns(len(STAFF_OP))
-    for i, (key, label, tip) in enumerate(STAFF_OP):
-        with cols[i]:
-            d[key] = st.number_input(label, min_value=0.0, max_value=30.0, value=float(d[key]),
-                         step=0.01, key=f"op_{key}", format="%.2f", help=tip)
-            cost = d[key] * d["salaire_operationnel"] * 1.333
-            st.caption(f"→ {cost:,.0f} €/an")
+        d["sal_adm"] = num_int("💶 Salaire brut admin/encadrement (€/an)", d["sal_adm"], mn=0, mx=200000, step=100,
+                                key="sal_adm_v", help="OCP = 18 628 €/an brut · Coût chargé total = 24 819 €")
 
-    d["salaire_operationnel"] = st.number_input("💶 Salaire brut annuel opérationnels (€/an)",
-                                    min_value=0, max_value=100000, value=int(d["salaire_operationnel"]), step=100,
-                                    help="Gross Salary/Wage per year · Polka OCP Logistics Operatives = 13 829 €/an brut · France ≈ 22 000-28 000 €")
+    with col2:
+        r = calc(d)
+        st.markdown("<div class='sec'>📊 Récapitulatif</div>", unsafe_allow_html=True)
+        st.markdown(f"""<div class='kpi-row' style='flex-direction:column;'>
+          <div class='kpi'><div class='kpi-lbl'>ETP total</div><div class='kpi-val blue'>{r['fte_tot']:.2f}</div><div class='kpi-sub'>Op: {r['fte_op']:.2f} · Adm: {r['fte_adm']:.2f}</div></div>
+          <div class='kpi'><div class='kpi-lbl'>Coût opérationnels</div><div class='kpi-val orange'>{r['pers_op']:,.0f} €</div></div>
+          <div class='kpi'><div class='kpi-lbl'>Coût admin/encadr.</div><div class='kpi-val orange'>{r['pers_adm']:,.0f} €</div></div>
+          <div class='kpi'><div class='kpi-lbl'>TOTAL personnel</div><div class='kpi-val blue'>{r['pers_tot']:,.0f} €</div></div>
+        </div>""", unsafe_allow_html=True)
+        if st.session_state.preset == "ocp":
+            hint("Personnel OCP Polka réel = <strong>148 419 €</strong>")
 
-    st.markdown("<div class='sec-title'>🟡 Encadrement & Administratifs — Office Employees (salaire brut = 18 628 €/an OCP)</div>", unsafe_allow_html=True)
-    help_box("""Coût total chargé Polka = <strong>24 819 €/ETP/an</strong>
-    (brut 18 628 € + congés/maladie 1 946 € + charges sociales 5 206 € + HO 1,3% + RHO/RCO 31,9%)
-    <br><strong>OCP : 1 ETP Administration Réception uniquement</strong> → tous les autres = 0.""")
-
-    STAFF_ADM = [
-        ("fte_admin_reception",  "📋 Admin. réception\n(Inbound Admin)",
-         "Gestion administrative des réceptions · Saisie WMS\nOCP = 1,00 ETP · Coût Polka total = 24 819 €/an"),
-        ("fte_admin_expedition", "📤 Admin. expédition\n(Outbound Admin)",
-         "Gestion administrative des expéditions · OCP = 0 ETP"),
-        ("fte_service_client",   "📞 Service client\n(Customer Service)",
-         "Relation client, réclamations · OCP = 0 ETP"),
-        ("fte_coord_equipe",     "👥 Coordinateur équipe\n(Team Coordinator)",
-         "Coordination des équipes (non process) · OCP = 0 ETP"),
-        ("fte_chef_equipe",      "🔧 Chef d'équipe\n(Shift Leader)",
-         "Encadrement de quart · OCP = 0 ETP"),
-        ("fte_resp_entrepot",    "🏆 Resp. entrepôt\n(WH Manager)",
-         "Responsable du site logistique · OCP = 0 ETP"),
-    ]
-    cols2 = st.columns(3)
-    for i, (key, label, tip) in enumerate(STAFF_ADM):
-        with cols2[i % 3]:
-            d[key] = st.number_input(label, min_value=0.0, max_value=20.0, value=float(d[key]),
-                         step=0.01, key=f"adm_{key}", format="%.2f", help=tip)
-            cost = d[key] * d["salaire_admin"] * 1.333
-            st.caption(f"→ {cost:,.0f} €/an")
-
-    d["salaire_admin"] = st.number_input("💶 Salaire brut annuel admin/encadrement (€/an)",
-                            min_value=0, max_value=200000, value=int(d["salaire_admin"]), step=100,
-                            help="Polka OCP Office Employees = 18 628 €/an brut · Coût total chargé = 24 819 €/an après HO+RHO")
-
-    res_p = calculer(d)
-    st.divider()
-    c1,c2,c3,c4 = st.columns(4)
-    with c1: st.metric("ETP total", f"{res_p['fte_total']:.2f}")
-    with c2: st.metric("ETP opérationnels", f"{res_p['fte_op']:.2f}")
-    with c3: st.metric("ETP admin/encadr.", f"{res_p['fte_adm']:.2f}")
-    with c4: st.metric("Coût personnel/an", f"{res_p['cout_pers_total']:,.0f} €")
-    if st.session_state.preset == "ocp":
-        st.markdown(f"<div class='info'>ℹ️ Coût personnel OCP réel Polka = <strong>148 419 €</strong> · Votre calcul : {res_p['cout_pers_total']:,.0f} €</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sec'>📈 Productivités site OCP</div>", unsafe_allow_html=True)
+        info("Onglet <strong>Prods simplifiées</strong> — mesures réelles OCP Mohammedia")
+        d["prod_dech"]  = num("Déchargement (pal/h)", d["prod_dech"], step=1.0, key="pd1", help="OCP = 37,63 pal/h productive · ETP calculé = 1,34")
+        d["prod_stock"] = num("Mise en stock (pal/h)", d["prod_stock"], step=1.0, key="pd2", help="OCP = 34,02 pal/h · ETP = 1,48")
+        d["prod_prel"]  = num("Prélèvement (pal/h)", d["prod_prel"], step=1.0, key="pd3", help="OCP = 27,69 pal/h · ETP = 1,82")
+        d["prod_charg"] = num("Chargement (pal/h)", d["prod_charg"], step=1.0, key="pd4", help="OCP = 32,19 pal/h · ETP = 1,56")
     nav(3)
 
 # ════════════════════════════════════════════════════════
 # ÉTAPE 4 — ENGINS
 # ════════════════════════════════════════════════════════
 elif st.session_state.step == 4:
-    hdr(4, "🏗️", "Cockpit Engins de Manutention",
-        "Parc d'engins alloué au contrat — onglet Cockpit Industrial Trucks.")
+    hdr(4,"🏗️","Cockpit Engins","Parc d'engins alloué au contrat — onglet Cockpit Industrial Trucks.")
+    info("""OCP : <strong>2,79 Fast Mover + 3,42 Reach Truck >8m = 6,21 engins · 56 074 €/an</strong>
+    Prix = tarifs catalogue Polka Industrial Trucks. Mode <em>Rent</em> = location annuelle.""")
 
-    help_box("""Polka calcule automatiquement le nombre d'engins nécessaires à partir des volumes et des productivités.
-    <br><strong>OCP : 2,79 Fast Mover + 3,42 Reach Truck >8m = 6,21 engins · 56 074 €/an</strong>
-    <br>Mode <em>External Rent</em> = location annuelle · Mode <em>Purchase</em> = achat amorti sur la durée de vie.
-    <br>Les prix sont issus de la table <strong>Industrial Trucks</strong> du fichier Polka (tarifs catalogue Dachser).""")
-
-    ENGINS_DEF = [
-        ("qt_fast_mover",        "prix_fast_mover",      "⚡ Fast Mover (FZ0040)",
-         "External Rent", 10606,
-         """Chariot basse levée à grande vitesse · Déchargement et chargement camions.
-         OCP : 2,79 unités · Location = 10 606 €/an/engin.
-         Productivité mesurée OCP : 37,63 pal/h déchargement · 32,19 pal/h chargement."""),
-        ("qt_reach_truck_gt8m",  "prix_reach_gt8m",      "🔝 Reach Truck > 8m (FZ0085)",
-         "External Rent", 44619,
-         """Chariot élévateur grande hauteur (>8m) · Mise en stock et prélèvement en rack haute.
-         OCP : 3,42 unités · Location = 44 619 €/an/engin.
-         Productivité OCP : 34,02 pal/h mise en stock · 27,69 pal/h prélèvement."""),
-        ("qt_reach_truck_lte8m", "prix_reach_lte8m",     "🔼 Reach Truck ≤ 8m (FZ0080)",
-         "External Rent", 31089,
-         "Chariot élévateur standard (≤8m) · OCP = 0 (entrepôt >8m nécessite FZ0085) · Location = 31 089 €/an"),
-        ("qt_transpalette",      "prix_transpalette",     "🤲 Transpalette manuel (FZ0010)",
-         "Achat", 375,
-         "Manutention manuelle au sol · Très faible coût · OCP = 0 · Achat = 375 €"),
-        ("qt_chariot_frontal",   "prix_chariot_frontal",  "🔄 Chariot frontal (FZ0070)",
-         "External Rent", 22644,
-         "Chargement/déchargement à grande capacité · OCP = 0 · Location = 22 644 €/an"),
-        ("qt_prep_horiz",        "prix_prep_horiz",       "📋 Préparateur horizontal (FZ0050)",
-         "External Rent", 11956,
-         "Picking colis au sol · OCP = 0 (pas de picking colis) · Location = 11 956 €/an"),
-        ("qt_allee_etroite",     "prix_allee_etroite",    "↔️ Allée étroite (FZ0090)",
-         "External Rent", 95000,
-         "Stockage haute densité · OCP = 0 · Location = 95 000 €/an (très spécialisé)"),
-        ("qt_balayeuse",         "prix_balayeuse",        "🧹 Balayeuse sol (FZ0100)",
-         "Achat", 24990,
-         "Entretien sol entrepôt · OCP = 0 · Achat = 24 990 €"),
+    ENGINS = [
+        ("qt_fm",  "prix_fm",  "⚡ Fast Mover (FZ0040)",        "Rent",  10606, "Déchargement & chargement camions · OCP = 2,79 · 10 606 €/an · Prod: 37,63 pal/h dech · 32,19 pal/h charg"),
+        ("qt_rt8", "prix_rt8", "🔝 Reach Truck > 8m (FZ0085)",  "Rent",  44619, "Stockage & prélèvement grande hauteur · OCP = 3,42 · 44 619 €/an · Prod: 34,02 mise stock · 27,69 prélèv"),
+        ("qt_rt8m","prix_rt8m","🔼 Reach Truck ≤ 8m (FZ0080)",  "Rent",  31089, "Chariot standard hauteur ≤ 8m · OCP = 0 (entrepôt > 8m) · 31 089 €/an"),
+        ("qt_tp",  "prix_tp",  "🤲 Transpalette manuel (FZ0010)","Buy",    375,  "Manutention sol · OCP = 0 · Achat 375 €"),
+        ("qt_cf",  "prix_cf",  "🔄 Chariot frontal (FZ0070)",   "Rent",  22644, "Grande capacité · OCP = 0 · 22 644 €/an"),
+        ("qt_ph",  "prix_ph",  "📋 Préparateur horiz. (FZ0050)","Rent",  11956, "Picking colis sol · OCP = 0 · 11 956 €/an"),
+        ("qt_ae",  "prix_ae",  "↔️ Allée étroite (FZ0090)",     "Rent",  95000, "Haute densité · OCP = 0 · 95 000 €/an"),
+        ("qt_bal", "prix_bal", "🧹 Balayeuse (FZ0100)",         "Buy",   24990, "Entretien sol · OCP = 0 · Achat 24 990 €"),
     ]
 
     total_qt = 0; total_cout = 0
-    for qt_key, prix_key, label, mode, prix_ref, tip in ENGINS_DEF:
-        active = d[qt_key] > 0
-        with st.expander(f"{'🟢' if active else '⚫'}  {label}  —  {d[qt_key]:.2f} unités", expanded=active):
-            st.caption(f"_Mode Polka : **{mode}** · Prix référence catalogue : {prix_ref:,} €_")
-            st.markdown(f"<div class='help-box'>{tip}</div>", unsafe_allow_html=True)
-            c1,c2,c3 = st.columns([2,2,2])
-            with c1:
-                d[qt_key] = st.number_input("Quantité allouée", min_value=0.0, max_value=50.0,
-                                value=float(d[qt_key]), step=0.01, key=f"qt_{qt_key}", format="%.2f",
-                                help="Calculé automatiquement par Polka selon volumes + productivités")
-            with c2:
-                d[prix_key] = st.number_input(f"Coût annuel / engin (€) · {mode}",
-                                min_value=0, max_value=500000, value=int(d[prix_key]), step=100,
-                                key=f"px_{prix_key}", help="Tarif catalogue Industrial Trucks Polka")
-            with c3:
-                st.metric("Coût total annuel", f"{d[qt_key]*d[prix_key]:,.0f} €")
-            total_qt   += d[qt_key]
-            total_cout += d[qt_key] * d[prix_key]
+    for i, (qk, pk, lbl, mode, prix_ref, tip) in enumerate(ENGINS):
+        active = d[qk] > 0
+        with st.expander(f"{'🟢' if active else '⚫'} {lbl} — {d[qk]:.2f} unités", expanded=active):
+            st.caption(f"_{tip}_")
+            c1, c2, c3 = st.columns([2,2,1])
+            with c1: d[qk] = num("Quantité", d[qk], mn=0.0, mx=50.0, step=0.01, key=f"qt_{qk}_{i}")
+            with c2: d[pk] = num_int(f"€/engin/an ({mode})", d[pk], mn=0, mx=500000, step=100, key=f"px_{pk}_{i}")
+            with c3: st.metric("Total", f"{d[qk]*d[pk]:,.0f} €")
+            total_qt += d[qk]; total_cout += d[qk]*d[pk]
 
     st.divider()
     c1,c2,c3 = st.columns(3)
     with c1: st.metric("Parc total", f"{total_qt:.2f} engins")
-    with c2: st.metric("Coût engins annuel", f"{total_cout:,.0f} €")
-    with c3: st.metric("Coût moyen / engin", f"{total_cout/max(total_qt,1):,.0f} €/an")
+    with c2: st.metric("Coût engins/an", f"{total_cout:,.0f} €")
+    with c3: st.metric("Coût moyen/engin", f"{total_cout/max(total_qt,1):,.0f} €/an")
     if st.session_state.preset == "ocp":
-        st.markdown(f"<div class='info'>ℹ️ Coût engins OCP réel Polka = <strong>56 074 €</strong> · Votre calcul : {total_cout:,.0f} €</div>", unsafe_allow_html=True)
+        hint("Coût engins OCP Polka réel = <strong>56 074 €</strong>")
     nav(4)
 
 # ════════════════════════════════════════════════════════
 # ÉTAPE 5 — VOLUMES & PROCESSUS
 # ════════════════════════════════════════════════════════
 elif st.session_state.step == 5:
-    hdr(5, "📊", "Volumes & Processus Logistiques",
-        "Quantités annuelles par processus — onglets Register Quantity Data et Price Sheet.")
-
-    help_box("""Les volumes sont saisis dans <strong>Register Quantity Data</strong> et servent de base au calcul des ETP et des coûts unitaires.
-    <br><strong>OCP : 3 processus actifs</strong> — Stockage WH0010, Entrées palettes FP inbound (MF1070), Sorties palettes FP outbound (MF4010).
-    <br>Tous les autres processus existent dans Polka mais ont un volume = 0 pour OCP.""")
+    hdr(5,"📊","Volumes & Processus","Quantités annuelles — onglets Register Quantity Data et UO.")
+    info("""Onglet <strong>UO</strong> : Budget prévisionnel OCP par activité et unité d'oeuvre.
+    OCP actif : <strong>Stockage + FP Inbound (MF1070) + FP Outbound (MF4010)</strong>.""")
 
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("<div class='sec-title'>🏭 Stockage (Warehouse Costs · WH0010)</div>", unsafe_allow_html=True)
-        help_box("""Prestation facturée au nombre d'emplacements palettes réservés contractuellement.
-        <br><strong>OCP :</strong> 4 000 emplacements vendus sur 4 000 nets = 100% d'occupation annuelle.
-        <br>Price Sheet : 4 000 empl. × 6,58 €/mois × 12 = <strong>315 840 € CA stockage</strong>.
-        <br>⚠️ Le stockage est déficitaire chez OCP (-42 838 €) — compensé par les processus.""")
-        d["emplacements_vendus"] = st.number_input("Emplacements palettes vendus / an",
-                                      min_value=0, max_value=100000, value=int(d["emplacements_vendus"]), step=10,
-                                      help="Nombre d'emplacements réservés contractuellement · OCP = 4 000 empl.")
-        empl_nets = int(d["emplacements_brut"] * d["taux_utilisation"])
-        taux_occ = d["emplacements_vendus"] / max(empl_nets, 1) * 100
-        if taux_occ > 100:
-            st.markdown(f"<div class='warn'>⚠️ {taux_occ:.1f}% > capacité nette ({empl_nets:,} empl.)</div>", unsafe_allow_html=True)
-        elif taux_occ > 85:
-            st.markdown(f"<div class='ok'>✓ Occupation : {taux_occ:.1f}% · Niveau optimal</div>", unsafe_allow_html=True)
-        else:
-            st.markdown(f"<div class='info'>ℹ️ Occupation : {taux_occ:.1f}% / {empl_nets:,} empl. nets</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sec'>🏭 Stockage</div>", unsafe_allow_html=True)
+        info("OCP : 4 000 empl. × 6,58 €/mois × 12 = <strong>315 840 € CA stockage</strong> (déficitaire : coûts = 358 678 €)")
+        d["empl_vendus"] = num_int("Emplacements vendus contractuellement", d["empl_vendus"], step=10, key="ev",
+                                    help="OCP = 4 000 empl. (100% occupation)")
+        empl_nets = round(d["emplacements_brut"] * d["taux_utilisation"] / 100)
+        taux_occ = d["empl_vendus"] / max(empl_nets, 1) * 100
+        if taux_occ > 100: warn(f"Occupation {taux_occ:.1f}% > capacité nette ({empl_nets:,} empl.)")
+        elif taux_occ > 85: ok(f"Occupation {taux_occ:.1f}% — niveau optimal")
+        else: hint(f"Occupation {taux_occ:.1f}% / {empl_nets:,} empl. nets")
 
-        st.markdown("<div class='sec-title'>📥 Flux entrants — FP Inbound</div>", unsafe_allow_html=True)
-        help_box("""<strong>MF1070 = Stock-in Inbound Pallets</strong> · Quantité principale facturée à l'entrée.
-        <br>Processus OCP : TP1020 Déchargement camion + TP1120 Contrôle réception + TP1220 Mise en stock sans zone transfert.
-        <br><strong>OCP = 70 720 pal/an → 260 pal/jour</strong>""")
-        d["vol_entrees_palettes"] = st.number_input("Palettes mises en stock / an (MF1070)",
-                                        min_value=0, max_value=2000000, value=int(d["vol_entrees_palettes"]), step=100,
-                                        help="Stock-in Inbound Pallets · Principal volume facturé à l'entrée · OCP = 70 720 pal/an")
-        d["vol_livraisons"] = st.number_input("Livraisons / camions reçus / an (MF1010)",
-                                  min_value=0, max_value=100000, value=int(d["vol_livraisons"]), step=1,
-                                  help="Delivery · Nombre de camions arrivants · OCP = 0 (non facturé séparément)")
-        d["vol_vrac_entree"] = st.number_input("Unités vrac entrantes / an (MF1040)",
-                                   min_value=0, max_value=10000000, value=int(d["vol_vrac_entree"]), step=100,
-                                   help="Picking Unit Inbound Loose · Unités individuelles dépotées · OCP = 0")
+        st.markdown("<div class='sec'>📥 Flux entrants — FP Inbound</div>", unsafe_allow_html=True)
+        info("MF1070 = Stock-in Inbound Pallets · OCP = 70 720 pal/an = <strong>260 pal/jour</strong>")
+        d["vol_in_pal"]  = num_int("Palettes mises en stock / an (MF1070)", d["vol_in_pal"], step=100, key="vi1",
+                                    help="OCP UO : 70 720 pal × 2,03 € process + 13,84 €/livr = 181 200 € budget réception")
+        d["vol_in_livr"] = num_int("Livraisons / camions reçus / an (MF1010)", d["vol_in_livr"], step=1, key="vi2",
+                                    help="OCP UO : 2 720 livraisons/an × 13,84 €/livr · Non facturé séparément ici")
 
-        st.markdown("<div class='sec-title'>🖥️ Coûts IT & WMS</div>", unsafe_allow_html=True)
-        d["cout_it_annuel"] = st.number_input("Coûts IT fixes annuels (€)",
-                                  min_value=0, max_value=500000, value=int(d["cout_it_annuel"]), step=100,
-                                  help="Fix Costs IT · OCP = 2 182 €/an (WMS MIKADO). Coût WMS global Polka = 17 277 €/an réparti entre tous les clients")
+        st.markdown("<div class='sec'>🖥️ IT & WMS</div>", unsafe_allow_html=True)
+        d["cout_it"] = num_int("Coûts IT fixes / an (€)", d["cout_it"], step=100, key="cit",
+                                help="OCP = 2 182 €/an · WMS MIKADO global = 17 277 € réparti entre clients")
 
     with col2:
-        st.markdown("<div class='sec-title'>📤 Flux sortants — FP Outbound</div>", unsafe_allow_html=True)
-        help_box("""<strong>MF4010 = Full Pallets</strong> · Palettes complètes prélevées et expédiées.
-        <br>Processus OCP : TP4010 Outbound Full Pallet Without Transfer Zone.
-        <br><strong>OCP = 70 720 pal/an</strong> (flux symétrique aux entrées — tout ce qui entre ressort)""")
-        d["vol_sorties_palettes"] = st.number_input("Palettes complètes expédiées / an (MF4010)",
-                                        min_value=0, max_value=2000000, value=int(d["vol_sorties_palettes"]), step=100,
-                                        help="Full Pallets · Volume principal facturé à la sortie · OCP = 70 720 pal/an")
-        d["vol_sorties_cmd"] = st.number_input("Ordres de sortie / an (MF4020)",
-                                   min_value=0, max_value=500000, value=int(d["vol_sorties_cmd"]), step=10,
-                                   help="Full Pallet Order · Nombre de lignes de commande · OCP = 0 (non facturé séparément)")
-        d["vol_vrac_sortie"] = st.number_input("Cartons vrac chargés / an (MF5040)",
-                                   min_value=0, max_value=10000000, value=int(d["vol_vrac_sortie"]), step=100,
-                                   help="Loose Loaded Cartons · OCP = 0")
+        st.markdown("<div class='sec'>📤 Flux sortants — FP Outbound</div>", unsafe_allow_html=True)
+        info("MF4010 = Full Pallets · OCP = 70 720 pal/an (flux symétrique aux entrées)")
+        d["vol_out_pal"] = num_int("Palettes complètes expédiées / an (MF4010)", d["vol_out_pal"], step=100, key="vo1",
+                                    help="OCP UO : 70 720 pal × 2,03 € process + 4 597 ordres × 13,84 € = 207 172 € budget expé.")
+        d["vol_out_cmd"] = num_int("Ordres de sortie / an (MF4020)", d["vol_out_cmd"], step=10, key="vo2",
+                                    help="OCP UO = 4 597 ordres/an · non facturé séparément")
 
-        st.markdown("<div class='sec-title'>🚛 Chargement camions — FP Loading</div>", unsafe_allow_html=True)
-        help_box("""<strong>MF5020 = Loaded Pallets</strong> · Palettes chargées physiquement sur le camion à la sortie.
-        <br>Processus OCP : TP5020 Loading Pallets not Double-Stacked (32,19 pal/h productive).
-        <br><strong>OCP = 0</strong> : le chargement est inclus dans le tarif sortie, non facturé séparément.""")
-        d["vol_palettes_chargees"] = st.number_input("Palettes chargées sur camion / an (MF5020)",
-                                         min_value=0, max_value=2000000, value=int(d["vol_palettes_chargees"]), step=100,
-                                         help="Loaded Pallets · OCP = 0 (inclus dans le prix de sortie palette)")
-        d["vol_chargements"] = st.number_input("Chargements camions / an (MF5010)",
-                                   min_value=0, max_value=100000, value=int(d["vol_chargements"]), step=1,
-                                   help="Loading of Trucks · OCP = 0")
+        st.markdown("<div class='sec'>🚛 Chargement camions — FP Loading</div>", unsafe_allow_html=True)
+        info("OCP = 0 volume séparé · Le chargement est inclus dans le tarif sortie palette (ETP = 1,56)")
+        d["vol_charg_cam"] = num_int("Chargements camions / an (MF5010)", d["vol_charg_cam"], step=1, key="vc1",
+                                      help="OCP = 0 (inclus dans le tarif sortie)")
+        d["vol_charg_pal"] = num_int("Palettes chargées / an (MF5020)", d["vol_charg_pal"], step=100, key="vc2",
+                                      help="OCP = 0")
 
-    if d["vol_entrees_palettes"] > 0 or d["vol_sorties_palettes"] > 0:
-        j = max(d["jours_ouvres"], 1)
-        st.divider()
-        st.markdown(f"""<div class='res-card'><div style='display:flex;gap:30px;flex-wrap:wrap;'>
-          <div><div class='res-label'>Entrées / jour</div><div class='res-blue'>{d["vol_entrees_palettes"]/j:.1f} pal/j</div></div>
-          <div><div class='res-label'>Sorties / jour</div><div class='res-blue'>{d["vol_sorties_palettes"]/j:.1f} pal/j</div></div>
-          <div><div class='res-label'>Total mouvements / jour</div><div class='res-blue'>{(d["vol_entrees_palettes"]+d["vol_sorties_palettes"])/j:.1f} pal/j</div></div>
-          <div><div class='res-label'>Jours ouvrés / an</div><div class='res-blue'>{j}</div></div>
-        </div></div>""", unsafe_allow_html=True)
+        if d["vol_in_pal"] > 0 or d["vol_out_pal"] > 0:
+            j = max(d["jours_ouvres"], 1)
+            st.markdown(f"""<div class='kpi-row' style='margin-top:16px;'>
+              <div class='kpi'><div class='kpi-lbl'>Entrées / jour</div><div class='kpi-val blue'>{d['vol_in_pal']/j:.1f} pal/j</div></div>
+              <div class='kpi'><div class='kpi-lbl'>Sorties / jour</div><div class='kpi-val blue'>{d['vol_out_pal']/j:.1f} pal/j</div></div>
+              <div class='kpi'><div class='kpi-lbl'>Total mvts / jour</div><div class='kpi-val blue'>{(d['vol_in_pal']+d['vol_out_pal'])/j:.1f} pal/j</div></div>
+            </div>""", unsafe_allow_html=True)
     nav(5)
 
 # ════════════════════════════════════════════════════════
-# ÉTAPE 6 — CALCUL DES TARIFS
+# ÉTAPE 6 — VISUALISATION PROCESSUS
 # ════════════════════════════════════════════════════════
 elif st.session_state.step == 6:
-    hdr(6, "💶", "Calcul Automatique des Tarifs",
-        "Tarifs recommandés selon la logique Polka — décomposition complète des coûts.")
+    hdr(6,"🔀","Design des Processus","Visualisation du flux logistique OCP — onglets Process Design & Prods simplifiées.")
+    info("Cette vue reproduit la logique de l'onglet <strong>Process Design</strong> de Polka — sous-processus actifs OCP avec productivités réelles.")
 
-    res = calculer(d)
-    m_ok = res["marge_calc"] >= d["marge_cible"]
-    c1,c2,c3,c4 = st.columns(4)
-    with c1: st.metric("CA estimé", f"{res['ca_total']:,.0f} €")
-    with c2: st.metric("Coûts totaux", f"{res['cout_total']:,.0f} €")
-    with c3: st.metric("Bénéfice", f"{res['profit']:,.0f} €", delta="✅ Objectif" if m_ok else "⚠️ Sous objectif")
-    with c4: st.metric("Marge réelle", f"{res['marge_calc']:.2%}")
+    # Calcul ETP par processus
+    j = max(d["jours_ouvres"], 1)
+    vol_in  = d["vol_in_pal"]
+    vol_out = d["vol_out_pal"]
+    taux_charge = 0.40  # 40% taux moyen appliqué OCP
 
-    if m_ok:
-        st.markdown(f"<div class='ok'>✅ Marge calculée {res['marge_calc']:.2%} ≥ objectif {d['marge_cible']:.0%}</div>", unsafe_allow_html=True)
+    def etp_process(vol_j, prod_h, taux=taux_charge):
+        """ETP = (Volume/j ÷ Prod/h) × (1 + taux_charge) / (8h/j)"""
+        if prod_h <= 0: return 0
+        h_prod = vol_j / prod_h
+        return h_prod * (1 + taux) / 8
+
+    etp_dech  = etp_process(vol_in/j, d["prod_dech"])
+    etp_stock = etp_process(vol_in/j, d["prod_stock"])
+    etp_prel  = etp_process(vol_out/j, d["prod_prel"])
+    etp_charg = etp_process(vol_out/j, d["prod_charg"])
+
+    st.markdown("### 📦 Flux Entrant — FP Inbound (TP1020 + TP1120 + TP1220)")
+
+    st.markdown(f"""
+    <div style='display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:14px 0;'>
+      <div class='proc-box' style='flex:1;min-width:180px;border-top:4px solid #2952d9;'>
+        <div class='proc-title'>🚛 TP1020 · Déchargement camion</div>
+        <div class='proc-step'>Drive camion → zone réception</div>
+        <div class='proc-step'>Prise palette (Fast Mover)</div>
+        <div class='proc-step'>Contrôle dommages & quantités</div>
+        <div class='proc-step'>Mesure température</div>
+        <div style='margin-top:8px;font-size:12px;color:#2952d9;font-weight:700;'>
+          {d['prod_dech']:.1f} pal/h (prod.) · ETP calculé : {etp_dech:.2f}
+        </div>
+        <div style='margin-top:4px;'><span class='badge-active'>ACTIF OCP</span> <span style='font-size:11px;color:#6b7bad;'>MF1020</span></div>
+      </div>
+      <div style='font-size:28px;color:#5c7cff;'>→</div>
+      <div class='proc-box' style='flex:1;min-width:180px;border-top:4px solid #0891b2;'>
+        <div class='proc-title'>🔍 TP1120 · Contrôle & étiquetage</div>
+        <div class='proc-step'>Scan SSCC + saisie WMS MIKADO</div>
+        <div class='proc-step'>Impression étiquette MIKADO</div>
+        <div class='proc-step'>Création articles nouveaux</div>
+        <div class='proc-step'>Gestion BBD/lot (si applicable)</div>
+        <div style='margin-top:8px;font-size:12px;color:#0891b2;font-weight:700;'>
+          266 pal/h (prod.) · ETP calculé : 0,27
+        </div>
+        <div style='margin-top:4px;'><span class='badge-active'>ACTIF OCP</span> <span style='font-size:11px;color:#6b7bad;'>MF1070</span></div>
+      </div>
+      <div style='font-size:28px;color:#5c7cff;'>→</div>
+      <div class='proc-box' style='flex:1;min-width:180px;border-top:4px solid #059669;'>
+        <div class='proc-title'>📦 TP1220 · Mise en stock</div>
+        <div class='proc-step'>Scan SSCC + lecture emplacement cible</div>
+        <div class='proc-step'>Levée chargée (Reach Truck >8m)</div>
+        <div class='proc-step'>Drive zone réception → rack</div>
+        <div class='proc-step'>Pose palette · Confirmation WMS</div>
+        <div style='margin-top:8px;font-size:12px;color:#059669;font-weight:700;'>
+          {d['prod_stock']:.1f} pal/h (prod.) · ETP calculé : {etp_stock:.2f}
+        </div>
+        <div style='margin-top:4px;'><span class='badge-active'>ACTIF OCP</span> <span style='font-size:11px;color:#6b7bad;'>MF1070</span></div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("### 📤 Flux Sortant — FP Outbound (TP4010) + Chargement (TP5020)")
+
+    st.markdown(f"""
+    <div style='display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:14px 0;'>
+      <div class='proc-box' style='flex:1;min-width:180px;border-top:4px solid #d97706;'>
+        <div class='proc-title'>🔽 TP4010 · Prélèvement palette</div>
+        <div class='proc-step'>Sélection ordre sur terminal</div>
+        <div class='proc-step'>Drive rack → emplacement cible</div>
+        <div class='proc-step'>Levée non chargée · Prise palette</div>
+        <div class='proc-step'>Drive → zone I-Point</div>
+        <div class='proc-step'>Impression BL + étiquette expé.</div>
+        <div class='proc-step'>Dépôt zone outbound</div>
+        <div style='margin-top:8px;font-size:12px;color:#d97706;font-weight:700;'>
+          {d['prod_prel']:.1f} pal/h (prod.) · ETP calculé : {etp_prel:.2f}
+        </div>
+        <div style='margin-top:4px;'><span class='badge-active'>ACTIF OCP</span> <span style='font-size:11px;color:#6b7bad;'>MF4010</span></div>
+      </div>
+      <div style='font-size:28px;color:#5c7cff;'>→</div>
+      <div class='proc-box' style='flex:1;min-width:180px;border-top:4px solid #dc2626;'>
+        <div class='proc-title'>🚛 TP5020 · Chargement camion</div>
+        <div class='proc-step'>Login procédure chargement I-Point</div>
+        <div class='proc-step'>Vérification zone outbound</div>
+        <div class='proc-step'>Scan étiquette expédition</div>
+        <div class='proc-step'>Prise palette (Fast Mover)</div>
+        <div class='proc-step'>Drive zone outbound → camion</div>
+        <div class='proc-step'>Fermeture remorque + BL</div>
+        <div style='margin-top:8px;font-size:12px;color:#dc2626;font-weight:700;'>
+          {d['prod_charg']:.1f} pal/h (prod.) · ETP calculé : {etp_charg:.2f}
+        </div>
+        <div style='margin-top:4px;'><span class='badge-active'>ACTIF OCP</span> <span style='font-size:11px;color:#6b7bad;'>MF5020</span></div>
+      </div>
+      <div style='font-size:28px;color:#5c7cff;'>→</div>
+      <div class='proc-box' style='flex:1;min-width:180px;border-top:4px solid #6b7280;opacity:0.6;'>
+        <div class='proc-title'>🔄 Processus non actifs OCP</div>
+        <div class='proc-step' style='background:#f3f4f6;color:#9ca3af;'>Picking colis (TP2xxx)</div>
+        <div class='proc-step' style='background:#f3f4f6;color:#9ca3af;'>Palettes mixtes (TP2020)</div>
+        <div class='proc-step' style='background:#f3f4f6;color:#9ca3af;'>VAS / conditionnement</div>
+        <div class='proc-step' style='background:#f3f4f6;color:#9ca3af;'>Réapprovisionnement</div>
+        <div style='margin-top:8px;'><span class='badge-inactive'>INACTIF OCP</span></div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Tableau récap ETP par processus
+    st.markdown("### 📊 ETP calculés par processus (Prods simplifiées OCP)")
+    proc_df = pd.DataFrame({
+        "Processus": ["Déchargement camion (TP1020)","Contrôle & étiquetage (TP1120)","Mise en stock (TP1220)","Prélèvement palette (TP4010)","Chargement camion (TP5020)","TOTAL"],
+        "Prod. pal/h": [d["prod_dech"], 266.0, d["prod_stock"], d["prod_prel"], d["prod_charg"], "—"],
+        "Vol/jour": [f"{vol_in/j:.0f}", f"{vol_in/j:.0f}", f"{vol_in/j:.0f}", f"{vol_out/j:.0f}", f"{vol_out/j:.0f}", "—"],
+        "ETP calculé": [f"{etp_dech:.2f}", "0.27", f"{etp_stock:.2f}", f"{etp_prel:.2f}", f"{etp_charg:.2f}", f"{etp_dech+0.27+etp_stock+etp_prel+etp_charg:.2f}"],
+        "ETP alloué OCP": ["1.34","0.27","1.48","1.82","1.56","6.47"],
+        "Engin": ["Fast Mover","—","Reach Truck >8m","Reach Truck >8m","Fast Mover","—"],
+        "Statut": ["✅ Actif","✅ Actif","✅ Actif","✅ Actif","✅ Actif","—"],
+    })
+    st.dataframe(proc_df, use_container_width=True, hide_index=True)
+
+    # Layout entrepôt simplifié
+    st.markdown("### 🗺️ Schéma flux entrepôt OCP (WH0010)")
+    st.markdown("""
+    <div style='background:white;border:2px solid #c5cdf5;border-radius:14px;padding:20px;font-family:monospace;font-size:12px;line-height:1.8;'>
+      <div style='display:grid;grid-template-columns:1fr 3fr 1fr;gap:10px;'>
+        <div style='background:#dbeafe;border:2px dashed #3b82f6;border-radius:8px;padding:12px;text-align:center;'>
+          <div style='font-weight:700;color:#1e40af;'>📥 ZONE RÉCEPTION</div>
+          <div style='color:#3b82f6;font-size:11px;'>Quais entrants<br>Contrôle & étiquetage<br>Tampon entrée</div>
+        </div>
+        <div style='background:#f0fdf4;border:2px solid #22c55e;border-radius:8px;padding:12px;text-align:center;'>
+          <div style='font-weight:700;color:#15803d;font-size:14px;'>🏭 ZONE STOCKAGE — 4 040 m² · 10m hauteur</div>
+          <div style='display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:8px;'>
+            <div style='background:#bbf7d0;border-radius:4px;padding:4px;text-align:center;font-size:10px;'>RACK A<br>Reach Truck</div>
+            <div style='background:#bbf7d0;border-radius:4px;padding:4px;text-align:center;font-size:10px;'>RACK B<br>>8m</div>
+            <div style='background:#bbf7d0;border-radius:4px;padding:4px;text-align:center;font-size:10px;'>RACK C<br>Fast Mover</div>
+            <div style='background:#bbf7d0;border-radius:4px;padding:4px;text-align:center;font-size:10px;'>RACK D<br>allées</div>
+          </div>
+          <div style='margin-top:8px;font-size:11px;color:#166534;'>4 211 empl. bruts · 4 000 empl. nets (95%) · 1,04 pal/m²</div>
+        </div>
+        <div style='background:#fef3c7;border:2px dashed #f59e0b;border-radius:8px;padding:12px;text-align:center;'>
+          <div style='font-weight:700;color:#92400e;'>📤 ZONE EXPÉDITION</div>
+          <div style='color:#b45309;font-size:11px;'>Quais sortants<br>I-Point BL/étiquettes<br>Tampon sortie</div>
+        </div>
+      </div>
+      <div style='display:flex;justify-content:space-around;margin-top:12px;'>
+        <div style='text-align:center;font-size:11px;color:#6b7bad;'>⚡ Fast Mover × 2,79<br>Déchargement · Chargement</div>
+        <div style='text-align:center;font-size:11px;color:#6b7bad;'>🔝 Reach Truck >8m × 3,42<br>Mise en stock · Prélèvement</div>
+        <div style='text-align:center;font-size:11px;color:#6b7bad;'>🖥️ WMS MIKADO<br>Pilotage tous processus</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+    nav(6)
+
+# ════════════════════════════════════════════════════════
+# ÉTAPE 7 — CALCUL TARIFS
+# ════════════════════════════════════════════════════════
+elif st.session_state.step == 7:
+    hdr(7,"💶","Calcul des Tarifs","Tarifs recommandés selon la logique Polka — avec simulateur interactif.")
+
+    r = calc(d)
+    m_ok = r["marge"] >= d["marge_cible"]
+
+    # KPIs principaux
+    mc = "green" if m_ok else "red"
+    st.markdown(f"""<div class='kpi-row'>
+      <div class='kpi'><div class='kpi-lbl'>CA estimé</div><div class='kpi-val blue'>{r['ca']:,.0f} €</div></div>
+      <div class='kpi'><div class='kpi-lbl'>Coûts totaux</div><div class='kpi-val orange'>{r['cout_tot']:,.0f} €</div></div>
+      <div class='kpi'><div class='kpi-lbl'>Bénéfice</div><div class='kpi-val {"green" if r["profit"]>0 else "red"}'>{r['profit']:,.0f} €</div></div>
+      <div class='kpi'><div class='kpi-lbl'>Marge réelle</div><div class='kpi-val {mc}'>{r['marge']:.2f}%</div><div class='kpi-sub'>Objectif : {d['marge_cible']:.1f}%</div></div>
+    </div>""", unsafe_allow_html=True)
+
+    if m_ok: ok(f"Marge {r['marge']:.2f}% ≥ objectif {d['marge_cible']:.1f}%")
     else:
-        gap = (d["marge_cible"] - res["marge_calc"]) * res["ca_total"]
-        st.markdown(f"<div class='warn'>⚠️ Marge {res['marge_calc']:.2%} &lt; objectif {d['marge_cible']:.0%} · Manque : {gap:,.0f} €/an</div>", unsafe_allow_html=True)
+        gap = (d["marge_cible"]/100 - r["marge"]/100) * r["ca"]
+        warn(f"Marge {r['marge']:.2f}% < objectif {d['marge_cible']:.1f}% — Manque {gap:,.0f} €/an")
 
-    st.divider()
+    st.markdown("---")
     st.markdown("### 💶 Tarifs recommandés")
-    help_box("""<strong>Formule Polka :</strong> Prix = Coût_unitaire ÷ (1 − marge_cible)
-    <br>Les tarifs sont ajustables — les marges se recalculent en temps réel.
-    <br><strong>Seuil min</strong> = coût unitaire (marge = 0%) · <strong>Recommandé</strong> = coût ÷ (1 − 10%)""")
+    info("Formule Polka : <strong>Prix = Coût unitaire ÷ (1 − marge cible)</strong> · Ajustez les tarifs ci-dessous pour simuler différents scénarios.")
 
-    col1,col2,col3 = st.columns(3)
+    col1, col2, col3 = st.columns(3)
+
     with col1:
         st.markdown("**🏭 Stockage (WH0010)**")
-        st.caption(f"Coût/empl./mois : {res['cu_stockage_mois']:.4f} € · Min : {res['prix_stockage_min']:.4f} €")
-        px_s = st.number_input("€ / emplacement / mois", min_value=0.0, max_value=100.0,
-                    value=round(float(res["prix_stockage_mois"]),4), step=0.01, key="px_s", format="%.4f",
-                    help=f"Recommandé : {res['prix_stockage_mois']:.4f} € · OCP réel : {d['tarif_reel_stockage_mois']:.2f} €/mois")
-        ca_s = d["emplacements_vendus"] * px_s * 12
-        mg_s = (ca_s - res["cout_entrepot"]) / ca_s if ca_s > 0 else 0
-        col = "#22d3a0" if mg_s >= 0 else "#ff5c6a"
-        st.markdown(f"""<div class='res-card'>
-          <div class='res-label'>CA stockage annuel</div><div style='color:{col};font-size:18px;font-weight:700;'>{ca_s:,.0f} €</div>
-          <div class='res-sub'>Marge : {mg_s:.2%} · {px_s*12:.2f} €/an/empl.</div>
+        st.caption(f"Coût min : {r['cu_stock']:.4f} €/empl./mois · Recommandé : {r['prix_stock']:.4f} €")
+        px_s = num("€ / empl. / mois", r["prix_stock"], mn=0.0, mx=100.0, step=0.01, key="pxs")
+        ca_s = d["empl_vendus"] * px_s * 12
+        mg_s = (ca_s - r["cout_wh"]) / ca_s * 100 if ca_s > 0 else 0
+        col = "green" if mg_s >= 0 else "red"
+        st.markdown(f"""<div class='kpi'>
+          <div class='kpi-lbl'>CA stockage annuel</div>
+          <div class='kpi-val {col}'>{ca_s:,.0f} €</div>
+          <div class='kpi-sub'>Marge : {mg_s:.2f}% · {px_s*12:.2f} €/an/empl.</div>
         </div>""", unsafe_allow_html=True)
         if st.session_state.preset == "ocp":
-            st.caption(f"OCP réel = {d['tarif_reel_stockage_mois']:.2f} €/mois → CA = {d['tarif_reel_stockage_mois']*d['emplacements_vendus']*12:,.0f} €")
+            st.caption(f"OCP réel = {d['tarif_stock_mois']:.2f} €/mois → {d['tarif_stock_mois']*d['empl_vendus']*12:,.0f} €/an")
 
     with col2:
-        st.markdown("**📥 Entrées palettes (MF1070)**")
-        st.caption(f"Coût unitaire : {res['cu_entree']:.4f} € · Min : {res['prix_entree_min']:.4f} €")
-        px_i = st.number_input("€ / palette entrante", min_value=0.0, max_value=50.0,
-                    value=round(float(res["prix_entree_palette"]),4), step=0.001, key="px_i", format="%.4f",
-                    help=f"Recommandé : {res['prix_entree_palette']:.4f} € · OCP réel : {d['tarif_reel_entree_palette']:.3f} €")
-        ca_i = d["vol_entrees_palettes"] * px_i
-        mg_i = (ca_i - res["cout_proc_in"]) / ca_i if ca_i > 0 else 0
-        col = "#22d3a0" if mg_i >= 0 else "#ff5c6a"
-        st.markdown(f"""<div class='res-card'>
-          <div class='res-label'>CA entrées palettes</div><div style='color:{col};font-size:18px;font-weight:700;'>{ca_i:,.0f} €</div>
-          <div class='res-sub'>Marge : {mg_i:.2%} · {d['vol_entrees_palettes']:,} pal × {px_i:.4f} €</div>
+        st.markdown("**📥 Entrée palette (MF1070)**")
+        st.caption(f"Coût min : {r['cu_in']:.4f} € · Recommandé : {r['prix_in']:.4f} €")
+        px_i = num("€ / palette entrante", r["prix_in"], mn=0.0, mx=50.0, step=0.01, key="pxi")
+        ca_i = d["vol_in_pal"] * px_i
+        mg_i = (ca_i - r["proc_in"]) / ca_i * 100 if ca_i > 0 else 0
+        col = "green" if mg_i >= 0 else "red"
+        st.markdown(f"""<div class='kpi'>
+          <div class='kpi-lbl'>CA entrées annuel</div>
+          <div class='kpi-val {col}'>{ca_i:,.0f} €</div>
+          <div class='kpi-sub'>Marge : {mg_i:.2f}% · {d['vol_in_pal']:,} pal × {px_i:.4f} €</div>
         </div>""", unsafe_allow_html=True)
         if st.session_state.preset == "ocp":
-            st.caption(f"OCP réel = {d['tarif_reel_entree_palette']:.3f} €/pal → CA = {d['tarif_reel_entree_palette']*d['vol_entrees_palettes']:,.0f} €")
+            st.caption(f"OCP réel = {d['tarif_in']:.3f} €/pal → {d['tarif_in']*d['vol_in_pal']:,.0f} €/an")
 
     with col3:
-        st.markdown("**📤 Sorties palettes (MF4010)**")
-        st.caption(f"Coût unitaire : {res['cu_sortie']:.4f} € · Min : {res['prix_sortie_min']:.4f} €")
-        px_o = st.number_input("€ / palette sortante", min_value=0.0, max_value=50.0,
-                    value=round(float(res["prix_sortie_palette"]),4), step=0.001, key="px_o", format="%.4f",
-                    help=f"Recommandé : {res['prix_sortie_palette']:.4f} € · OCP réel : {d['tarif_reel_sortie_palette']:.3f} €")
-        ca_o = d["vol_sorties_palettes"] * px_o
-        mg_o = (ca_o - res["cout_proc_out"]) / ca_o if ca_o > 0 else 0
-        col = "#22d3a0" if mg_o >= 0 else "#ff5c6a"
-        st.markdown(f"""<div class='res-card'>
-          <div class='res-label'>CA sorties palettes</div><div style='color:{col};font-size:18px;font-weight:700;'>{ca_o:,.0f} €</div>
-          <div class='res-sub'>Marge : {mg_o:.2%} · {d['vol_sorties_palettes']:,} pal × {px_o:.4f} €</div>
+        st.markdown("**📤 Sortie palette (MF4010)**")
+        st.caption(f"Coût min : {r['cu_out']:.4f} € · Recommandé : {r['prix_out']:.4f} €")
+        px_o = num("€ / palette sortante", r["prix_out"], mn=0.0, mx=50.0, step=0.01, key="pxo")
+        ca_o = d["vol_out_pal"] * px_o
+        mg_o = (ca_o - r["proc_out"]) / ca_o * 100 if ca_o > 0 else 0
+        col = "green" if mg_o >= 0 else "red"
+        st.markdown(f"""<div class='kpi'>
+          <div class='kpi-lbl'>CA sorties annuel</div>
+          <div class='kpi-val {col}'>{ca_o:,.0f} €</div>
+          <div class='kpi-sub'>Marge : {mg_o:.2f}% · {d['vol_out_pal']:,} pal × {px_o:.4f} €</div>
         </div>""", unsafe_allow_html=True)
         if st.session_state.preset == "ocp":
-            st.caption(f"OCP réel = {d['tarif_reel_sortie_palette']:.3f} €/pal → CA = {d['tarif_reel_sortie_palette']*d['vol_sorties_palettes']:,.0f} €")
+            st.caption(f"OCP réel = {d['tarif_out']:.3f} €/pal → {d['tarif_out']*d['vol_out_pal']:,.0f} €/an")
 
-    st.divider()
-    st.markdown("### 🧩 Décomposition des coûts (Cost Split-up Polka)")
+    st.markdown("---")
+    st.markdown("### 🧩 Décomposition des coûts")
     cost_df = pd.DataFrame({
-        "Poste de coût": ["🏭 Loyer charges incluses","🔧 Racks + Sécurité + Câblage",
-                           "👷 Personnel opérationnel","📋 Personnel admin/encadr.",
-                           "🏗️ Engins de manutention","🖥️ IT & WMS","━ TOTAL COÛTS"],
-        "Montant (€)": [f"{res['loyer_total']:,.0f}",
-                         f"{res['cout_rack_an']+res['cout_secu_an']+res['cout_cable_an']:,.0f}",
-                         f"{res['cout_pers_op']:,.0f}", f"{res['cout_pers_adm']:,.0f}",
-                         f"{res['cout_engins']:,.0f}", f"{res['cout_it_total']:,.0f}",
-                         f"{res['cout_total']:,.0f}"],
-        "Part": [f"{res['loyer_total']/max(res['cout_total'],1)*100:.1f}%",
-                  f"{(res['cout_rack_an']+res['cout_secu_an']+res['cout_cable_an'])/max(res['cout_total'],1)*100:.1f}%",
-                  f"{res['cout_pers_op']/max(res['cout_total'],1)*100:.1f}%",
-                  f"{res['cout_pers_adm']/max(res['cout_total'],1)*100:.1f}%",
-                  f"{res['cout_engins']/max(res['cout_total'],1)*100:.1f}%",
-                  f"{res['cout_it_total']/max(res['cout_total'],1)*100:.1f}%",
-                  "100,0%"],
+        "Poste": ["🏭 Loyer (charges incluses)","🔧 Investissements amortis","👷 Personnel opérationnel",
+                   "📋 Personnel admin/encadr.","🏗️ Engins manutention","🖥️ IT & WMS","━ TOTAL"],
+        "€/an":  [f"{r['loyer_tot']:,.0f}", f"{r['rack_an']+r['secu_an']+r['cable_an']:,.0f}",
+                   f"{r['pers_op']:,.0f}", f"{r['pers_adm']:,.0f}", f"{r['engins_cout']:,.0f}",
+                   f"{r['it_tot']:,.0f}", f"{r['cout_tot']:,.0f}"],
+        "Part":  [f"{r['loyer_tot']/max(r['cout_tot'],1)*100:.1f}%",
+                   f"{(r['rack_an']+r['secu_an']+r['cable_an'])/max(r['cout_tot'],1)*100:.1f}%",
+                   f"{r['pers_op']/max(r['cout_tot'],1)*100:.1f}%",
+                   f"{r['pers_adm']/max(r['cout_tot'],1)*100:.1f}%",
+                   f"{r['engins_cout']/max(r['cout_tot'],1)*100:.1f}%",
+                   f"{r['it_tot']/max(r['cout_tot'],1)*100:.1f}%","100%"],
     })
     st.dataframe(cost_df, use_container_width=True, hide_index=True)
 
     if st.session_state.preset == "ocp":
-        st.markdown("### 🔄 Comparatif avec les tarifs réels OCP (Price Sheet Polka V202541)")
+        st.markdown("### 🔄 Comparatif OCP réel vs calculé (Polka V202541)")
         cmp = pd.DataFrame({
-            "Prestation": ["Stockage / empl. / mois","Entrée palette","Sortie palette",
-                           "CA total","Coûts totaux","Bénéfice","Marge"],
-            "OCP réel Polka": [f"{d['tarif_reel_stockage_mois']:.2f} €",f"{d['tarif_reel_entree_palette']:.3f} €",
-                                f"{d['tarif_reel_sortie_palette']:.3f} €",f"{d['ca_reel_total']:,.0f} €",
-                                f"{d['cout_reel_total']:,.0f} €",f"{d['profit_reel']:,.0f} €",f"{d['marge_reelle']:.2%}"],
-            "Calculé Wizard": [f"{res['prix_stockage_mois']:.2f} €",f"{res['prix_entree_palette']:.3f} €",
-                                f"{res['prix_sortie_palette']:.3f} €",f"{res['ca_total']:,.0f} €",
-                                f"{res['cout_total']:,.0f} €",f"{res['profit']:,.0f} €",f"{res['marge_calc']:.2%}"],
+            "": ["Stockage/empl./mois","Entrée palette","Sortie palette","CA total","Coûts","Bénéfice","Marge"],
+            "OCP réel Polka": [f"{d['tarif_stock_mois']:.2f} €",f"{d['tarif_in']:.3f} €",f"{d['tarif_out']:.3f} €",
+                                f"{d['ca_reel']:,.0f} €",f"{d['cout_reel']:,.0f} €",f"{d['profit_reel']:,.0f} €",f"{d['marge_reelle']:.2f}%"],
+            "Wizard calculé": [f"{r['prix_stock']:.2f} €",f"{r['prix_in']:.3f} €",f"{r['prix_out']:.3f} €",
+                                f"{r['ca']:,.0f} €",f"{r['cout_tot']:,.0f} €",f"{r['profit']:,.0f} €",f"{r['marge']:.2f}%"],
         })
         st.dataframe(cmp, use_container_width=True, hide_index=True)
 
-    st.divider()
-    export = {"Projet": d["projet"],"Site": d["agence"],"CA_total": round(res["ca_total"],2),
-              "Couts_totaux": round(res["cout_total"],2),"Benefice": round(res["profit"],2),
-              "Marge_pct": round(res["marge_calc"]*100,2),
-              "Prix_stockage_mois": round(res["prix_stockage_mois"],4),
-              "Prix_entree_palette": round(res["prix_entree_palette"],4),
-              "Prix_sortie_palette": round(res["prix_sortie_palette"],4),
-              "ETP_total": round(res["fte_total"],2), "Cout_personnel": round(res["cout_pers_total"],2),
-              "Cout_engins": round(res["cout_engins"],2), "Cout_entrepot": round(res["cout_entrepot"],2)}
-    st.download_button("⬇️ Télécharger résultats JSON", json.dumps(export,indent=2,ensure_ascii=False),
+    st.markdown("---")
+    export = {"Projet": d["projet"], "Site": d["agence"],
+              "CA_total": round(r["ca"],2), "Couts_totaux": round(r["cout_tot"],2),
+              "Benefice": round(r["profit"],2), "Marge_pct": round(r["marge"],2),
+              "Prix_stockage_mois": round(r["prix_stock"],4),
+              "Prix_entree_palette": round(r["prix_in"],4),
+              "Prix_sortie_palette": round(r["prix_out"],4),
+              "ETP_total": round(r["fte_tot"],2)}
+    st.download_button("⬇️ Export JSON", json.dumps(export,indent=2,ensure_ascii=False),
                         f"polka_{d['projet'] or 'projet'}.json","application/json",type="primary")
-    nav(6)
+    nav(7)
 
 # ════════════════════════════════════════════════════════
-# ÉTAPE 7 — SENSIBILITÉ
+# ÉTAPE 8 — SENSIBILITÉ
 # ════════════════════════════════════════════════════════
-elif st.session_state.step == 7:
-    hdr(7, "📉", "Analyse de Sensibilité & Scénarios",
-        "Impact des variations sur la marge — seuil de rentabilité et simulateur de scénarios.")
+elif st.session_state.step == 8:
+    hdr(8,"📉","Analyse de Sensibilité","Impact des variations sur la marge · Seuil de rentabilité · Scénarios.")
 
-    res = calculer(d)
+    r = calc(d)
 
-    st.markdown("### 📊 Tableau de sensibilité (±20%)")
-    help_box("""Simule l'effet d'une variation de ±20% sur trois leviers :
-    <strong>Volumes</strong> (palettes IN/OUT), <strong>Loyer</strong> (m²/mois), <strong>Salaires</strong> (bruts annuels).
-    Les coûts fixes restent constants dans chaque simulation.""")
-
+    st.markdown("### 📊 Tableau de sensibilité ±20%")
     rows = []
     for v in [-20,-15,-10,-5,0,5,10,15,20]:
         f = 1 + v/100
-        dv = deepcopy(d); dv["vol_entrees_palettes"]=int(d["vol_entrees_palettes"]*f); dv["vol_sorties_palettes"]=int(d["vol_sorties_palettes"]*f)
-        rv = calculer(dv)
-        dl = deepcopy(d); dl["loyer_m2_mois"]=d["loyer_m2_mois"]*f
-        rl = calculer(dl)
-        ds = deepcopy(d); ds["salaire_operationnel"]=int(d["salaire_operationnel"]*f); ds["salaire_admin"]=int(d["salaire_admin"]*f)
-        rs = calculer(ds)
+        dv = deepcopy(d); dv["vol_in_pal"]=int(d["vol_in_pal"]*f); dv["vol_out_pal"]=int(d["vol_out_pal"]*f)
+        rv = calc(dv)
+        dl = deepcopy(d); dl["loyer_m2_mois"] = d["loyer_m2_mois"]*f
+        rl = calc(dl)
+        ds = deepcopy(d); ds["sal_op"]=int(d["sal_op"]*f); ds["sal_adm"]=int(d["sal_adm"]*f)
+        rs = calc(ds)
         rows.append({"Variation":f"{v:+d}%",
-                     "Marge (volumes)":f"{rv['marge_calc']:.2%}","Profit volumes (€)":f"{rv['profit']:,.0f}",
-                     "Marge (loyer)":f"{rl['marge_calc']:.2%}","Profit loyer (€)":f"{rl['profit']:,.0f}",
-                     "Marge (salaires)":f"{rs['marge_calc']:.2%}","Profit salaires (€)":f"{rs['profit']:,.0f}"})
+                     "Marge/volumes":f"{rv['marge']:.2f}%","Profit volumes":f"{rv['profit']:,.0f} €",
+                     "Marge/loyer":f"{rl['marge']:.2f}%","Profit loyer":f"{rl['profit']:,.0f} €",
+                     "Marge/salaires":f"{rs['marge']:.2f}%","Profit salaires":f"{rs['profit']:,.0f} €"})
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-    st.divider()
-    st.markdown("### 🎛️ Simulateur de scénario personnalisé")
+    st.markdown("---")
+    st.markdown("### 🎛️ Simulateur de scénario")
     c1,c2,c3,c4 = st.columns(4)
-    with c1: sv = st.slider("📦 Volumes (%)", -50, 50, 0, 5)
-    with c2: sl = st.slider("🏭 Loyer (%)", -50, 100, 0, 5)
-    with c3: ss = st.slider("👷 Salaires (%)", -30, 50, 0, 5)
-    with c4: sm = st.slider("🎯 Marge cible (%)", 0, 25, int(d["marge_cible"]*100), 1)
+    with c1: sv = st.slider("📦 Volumes (%)", -50, 50, 0, 5, key="sl_v")
+    with c2: sl = st.slider("🏭 Loyer (%)", -50, 100, 0, 5, key="sl_l")
+    with c3: ss = st.slider("👷 Salaires (%)", -30, 50, 0, 5, key="sl_s")
+    with c4: sm = st.slider("🎯 Marge cible (%)", 0, 25, int(d["marge_cible"]), 1, key="sl_m")
 
     dsim = deepcopy(d)
-    dsim["vol_entrees_palettes"]  = int(d["vol_entrees_palettes"]  * (1+sv/100))
-    dsim["vol_sorties_palettes"]  = int(d["vol_sorties_palettes"]  * (1+sv/100))
-    dsim["loyer_m2_mois"]         = d["loyer_m2_mois"] * (1+sl/100)
-    dsim["salaire_operationnel"]  = int(d["salaire_operationnel"]  * (1+ss/100))
-    dsim["salaire_admin"]         = int(d["salaire_admin"]         * (1+ss/100))
-    dsim["marge_cible"]           = sm/100
-    rsim = calculer(dsim)
-    rbase = calculer(d)
+    dsim["vol_in_pal"]  = int(d["vol_in_pal"] * (1+sv/100))
+    dsim["vol_out_pal"] = int(d["vol_out_pal"] * (1+sv/100))
+    dsim["loyer_m2_mois"] = d["loyer_m2_mois"] * (1+sl/100)
+    dsim["sal_op"]  = int(d["sal_op"]  * (1+ss/100))
+    dsim["sal_adm"] = int(d["sal_adm"] * (1+ss/100))
+    dsim["marge_cible"] = float(sm)
+    rsim = calc(dsim)
 
     c1,c2,c3,c4 = st.columns(4)
-    with c1: st.metric("CA simulé",       f"{rsim['ca_total']:,.0f} €",    delta=f"{rsim['ca_total']-rbase['ca_total']:+,.0f} €")
-    with c2: st.metric("Coûts simulés",   f"{rsim['cout_total']:,.0f} €",  delta=f"{rsim['cout_total']-rbase['cout_total']:+,.0f} €", delta_color="inverse")
-    with c3: st.metric("Bénéfice simulé", f"{rsim['profit']:,.0f} €",      delta=f"{rsim['profit']-rbase['profit']:+,.0f} €")
-    with c4: st.metric("Marge simulée",   f"{rsim['marge_calc']:.2%}",     delta=f"{rsim['marge_calc']-rbase['marge_calc']:+.2%}")
+    with c1: st.metric("CA simulé",     f"{rsim['ca']:,.0f} €",       delta=f"{rsim['ca']-r['ca']:+,.0f} €")
+    with c2: st.metric("Coûts simulés", f"{rsim['cout_tot']:,.0f} €", delta=f"{rsim['cout_tot']-r['cout_tot']:+,.0f} €", delta_color="inverse")
+    with c3: st.metric("Bénéfice simulé",f"{rsim['profit']:,.0f} €",  delta=f"{rsim['profit']-r['profit']:+,.0f} €")
+    with c4: st.metric("Marge simulée", f"{rsim['marge']:.2f}%",      delta=f"{rsim['marge']-r['marge']:+.2f}%")
 
-    mc2 = "#22d3a0" if rsim["marge_calc"] >= dsim["marge_cible"] else "#ff5c6a"
-    msg = "✅ Objectif atteint" if rsim["marge_calc"] >= dsim["marge_cible"] else f"⚠️ Manque {(dsim['marge_cible']-rsim['marge_calc'])*rsim['ca_total']:,.0f} €/an pour atteindre {dsim['marge_cible']:.0%}"
-    st.markdown(f"<div class='res-card'><span style='color:{mc2};font-weight:700;font-size:14px;'>{msg}</span></div>", unsafe_allow_html=True)
+    if rsim["marge"] >= dsim["marge_cible"]:
+        ok(f"Objectif {dsim['marge_cible']:.1f}% atteint dans ce scénario !")
+    else:
+        gap = (dsim["marge_cible"]/100 - rsim["marge"]/100) * rsim["ca"]
+        warn(f"Manque {gap:,.0f} €/an pour atteindre {dsim['marge_cible']:.1f}%")
 
-    st.divider()
+    st.markdown("---")
     st.markdown("### 📍 Seuil de rentabilité (Point mort)")
     c1,c2,c3 = st.columns(3)
-    with c1: st.metric("CA au seuil", f"{res['seuil_rentabilite']:,.0f} €", help="CA minimum pour couvrir tous les coûts fixes")
-    with c2: st.metric("CA actuel",   f"{res['ca_total']:,.0f} €")
+    with c1: st.metric("CA seuil", f"{r['seuil']:,.0f} €", help="CA minimum pour couvrir les coûts fixes")
+    with c2: st.metric("CA actuel", f"{r['ca']:,.0f} €")
     with c3:
-        cushion = (res["ca_total"] - res["seuil_rentabilite"]) / max(res["ca_total"],1) * 100
+        cushion = (r["ca"] - r["seuil"]) / max(r["ca"],1) * 100
         st.metric("Marge de sécurité", f"{cushion:.1f}%",
                   delta="✅ Solide" if cushion > 20 else ("⚠️ Correct" if cushion > 5 else "🔴 Fragile"))
-    nav(7)
+    nav(8)
 
-st.markdown("""<div style='text-align:center;padding:16px 0 6px;color:#2d3155;font-size:11px;
-     border-top:1px solid #1a1d2e;margin-top:20px;'>
-  Polka Wizard v2 · Modèle Polka V202541 · OCP Morocco · Dachser Contract Logistics
+st.markdown("""<div style='text-align:center;padding:14px 0 4px;color:#9ca3af;font-size:11px;
+     border-top:1px solid #e5e7eb;margin-top:20px;'>
+  Polka Wizard v3 · Polka V202541 · OCP Morocco · Dachser Contract Logistics
 </div>""", unsafe_allow_html=True)
