@@ -398,6 +398,10 @@ if "step" not in st.session_state:
     st.session_state.step = 0
 if "lang" not in st.session_state:
     st.session_state.lang = "FR"
+if "currency" not in st.session_state:
+    st.session_state.currency = "EUR"
+if "period" not in st.session_state:
+    st.session_state.period = "annual"   # "annual" | "monthly"
 if "d" not in st.session_state:
     st.session_state.d = {}
 
@@ -417,17 +421,95 @@ def get(key, default=None):
 def put(key, val):
     st.session_state.d[key] = val
 
+# ── Currency helpers ──
+def cur_symbol():
+    return "MAD" if st.session_state.currency == "MAD" else "€"
+
+def cur_rate():
+    """Return the MAD→EUR conversion factor. If currency=MAD, no conversion (factor=1/fx to go EUR→MAD)."""
+    fx = float(get("exchange_rate", 0.094))
+    if st.session_state.currency == "MAD":
+        return 1.0 / fx if fx > 0 else 10.638  # EUR→MAD
+    return 1.0  # already in EUR
+
+def to_display(eur_value):
+    """Convert an EUR value to display currency."""
+    return eur_value * cur_rate()
+
+def from_display(display_value):
+    """Convert a display-currency value back to EUR (for storage)."""
+    r = cur_rate()
+    return display_value / r if r != 0 else display_value
+
+def fmt_cur(eur_value, decimals=0):
+    """Format a EUR value in display currency."""
+    v = to_display(eur_value)
+    sym = cur_symbol()
+    if decimals == 0:
+        return f"{v:,.0f} {sym}"
+    else:
+        return f"{v:,.{decimals}f} {sym}"
+
+def cur_label(base_label):
+    """Replace € symbol in a label with the active currency symbol."""
+    sym = cur_symbol()
+    return base_label.replace("€", sym).replace("EUR", sym)
+
+def period_factor():
+    """1 for annual, 1/12 for monthly."""
+    return 1.0 if st.session_state.period == "annual" else 1.0 / 12.0
+
+def period_label():
+    """Human label for selected period."""
+    lang = st.session_state.lang
+    if st.session_state.period == "annual":
+        return "Annuel" if lang == "FR" else "Annual"
+    return "Mensuel" if lang == "FR" else "Monthly"
+
+def fmt_period(eur_annual, decimals=0):
+    """Format a EUR annual value → display currency × period factor."""
+    v = to_display(eur_annual * period_factor())
+    sym = cur_symbol()
+    if decimals == 0:
+        return f"{v:,.0f} {sym}"
+    return f"{v:,.{decimals}f} {sym}"
+
 # ─────────────────────────────────────────────────────────────────────────────
 # SIDEBAR
 # ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## 📦 Polka MUP Wizard")
-    lang = st.radio(T("sb_hint").split("·")[0] if "·" in T("sb_hint") else "Language / Langue",
-                    ["FR", "EN"], horizontal=True,
+
+    lang = st.radio("🌐 Language / Langue", ["FR", "EN"], horizontal=True,
                     index=0 if st.session_state.lang == "FR" else 1)
     if lang != st.session_state.lang:
         st.session_state.lang = lang
         st.rerun()
+
+    currency = st.radio("💱 Devise / Currency", ["EUR (€)", "MAD (درهم)"], horizontal=True,
+                        index=0 if st.session_state.currency == "EUR" else 1)
+    new_cur = "EUR" if currency.startswith("EUR") else "MAD"
+    if new_cur != st.session_state.currency:
+        st.session_state.currency = new_cur
+        st.rerun()
+
+    period_choice = st.radio(
+        "📅 Vue / View",
+        ["Annuel / Annual", "Mensuel / Monthly"],
+        horizontal=True,
+        index=0 if st.session_state.period == "annual" else 1
+    )
+    new_period = "annual" if period_choice.startswith("Annuel") else "monthly"
+    if new_period != st.session_state.period:
+        st.session_state.period = new_period
+        st.rerun()
+
+    # Show live exchange rate info
+    fx = float(get("exchange_rate", 0.094))
+    if st.session_state.currency == "MAD":
+        st.caption(f"1 € = {1/fx:,.2f} MAD  (taux : {fx:.4f})")
+    else:
+        st.caption(f"1 MAD = {fx:.4f} €")
 
     st.markdown("---")
     for i, label in enumerate(SL()):
@@ -542,23 +624,24 @@ def step3():
         total_mad = loyer + charges + idilite; put("total_rent_mad", total_mad)
         st.metric(T("s3_total_rent_mad"), f"{total_mad:.3f} MAD/m²/mois")
         total_eur = total_mad * fx; put("total_rent_eur", total_eur)
-        st.metric(T("s3_total_rent_eur"), f"{total_eur:.4f} €/m²/mois")
+        disp_rent = total_eur if st.session_state.currency == "EUR" else total_eur / fx
+        st.metric(T("s3_total_rent_eur"), f"{to_display(total_eur):.4f} {cur_symbol()}/m²/mois")
     with c6:
-        st.metric(T("annual_rent"), f"{surf * total_eur * 12:,.0f} €")
-        st.metric("Office rent (100m²)", f"{100 * total_eur * 12:,.0f} €")
+        st.metric(T("annual_rent"), fmt_period(surf * total_eur * 12))
+        st.metric("Office rent (100m²)", fmt_period(100 * total_eur * 12))
 
     st.subheader(f"🔧 Investments")
     c7, c8, c9 = st.columns(3)
     with c7:
-        r_ppl  = st.number_input(T("s3_racking_ppl"),   value=float(get("racking_ppl", 35.0)), min_value=0.0, step=1.0); put("racking_ppl", r_ppl)
+        r_ppl  = from_display(st.number_input(cur_label(T("s3_racking_ppl")),   value=to_display(float(get("racking_ppl", 35.0))), min_value=0.0, step=max(0.1, round(cur_rate(),1)))); put("racking_ppl", r_ppl)
         r_qty  = st.number_input(T("s3_racking_qty"),   value=float(get("racking_qty", 1741)), min_value=0.0, step=1.0); put("racking_qty", r_qty)
-        sec    = st.number_input(T("s3_security"),       value=float(get("security_eur_m2", 5.0)), min_value=0.0, step=0.5); put("security_eur_m2", sec)
-        cab    = st.number_input(T("s3_cabling"),        value=float(get("cabling_eur_m2", 5.0)),  min_value=0.0, step=0.5); put("cabling_eur_m2", cab)
+        sec    = from_display(st.number_input(cur_label(T("s3_security")),       value=to_display(float(get("security_eur_m2", 5.0))), min_value=0.0, step=max(0.1, round(cur_rate(),1)))); put("security_eur_m2", sec)
+        cab    = from_display(st.number_input(cur_label(T("s3_cabling")),        value=to_display(float(get("cabling_eur_m2", 5.0))),  min_value=0.0, step=max(0.1, round(cur_rate(),1)))); put("cabling_eur_m2", cab)
     with c8:
         ls_q   = st.number_input(T("s3_lower_shelf_qty"),  value=float(get("lower_shelf_qty", 110)),  min_value=0.0, step=1.0); put("lower_shelf_qty", ls_q)
-        ls_p   = st.number_input(T("s3_lower_shelf_price"),value=float(get("lower_shelf_price", 38.0)),min_value=0.0, step=1.0); put("lower_shelf_price", ls_p)
+        ls_p   = from_display(st.number_input(cur_label(T("s3_lower_shelf_price")), value=to_display(float(get("lower_shelf_price", 38.0))), min_value=0.0, step=max(0.5, round(cur_rate(),0)))); put("lower_shelf_price", ls_p)
         gr_q   = st.number_input(T("s3_grating_qty"),   value=float(get("grating_qty", 550)),   min_value=0.0, step=1.0); put("grating_qty", gr_q)
-        gr_p   = st.number_input(T("s3_grating_price"), value=float(get("grating_price", 20.0)),min_value=0.0, step=1.0); put("grating_price", gr_p)
+        gr_p   = from_display(st.number_input(cur_label(T("s3_grating_price")), value=to_display(float(get("grating_price", 20.0))), min_value=0.0, step=max(0.5, round(cur_rate(),0)))); put("grating_price", gr_p)
     with c9:
         dy     = st.number_input(T("s3_invest_depr_years"), value=float(get("invest_depr_years", 12)), min_value=1.0, max_value=30.0, step=1.0); put("invest_depr_years", dy)
         pk     = st.number_input(T("s3_peak_pal"), value=float(get("peak_pal", 2413)), min_value=0.0, step=10.0); put("peak_pal", pk)
@@ -566,13 +649,13 @@ def step3():
 
     wh = calc_warehouse_costs(st.session_state.d); put("wh_detail", wh); put("wh_total", wh["total"])
     st.markdown("---")
-    st.subheader(f"📊 {T('total')} — {T('cost_wh')}")
+    st.subheader(f"📊 {T('total')} — {T('cost_wh')}  *({period_label()} · {cur_symbol()})*")
     m1, m2, m3, m4, m5 = st.columns(5)
-    m1.metric("🏗 " + T("annual_rent"),         f"{wh['rent']:,.0f} €")
-    m2.metric("📦 " + T("racking"),             f"{wh['racking']:,.0f} €")
-    m3.metric("🔐 " + T("security_cabling"),    f"{wh['security'] + wh['cabling']:,.0f} €")
-    m4.metric("🏠 Office+Equip",                f"{wh['office']:,.0f} €")
-    m5.metric(f"📋 {T('total')}",               f"{wh['total']:,.0f} €")
+    m1.metric("🏗 " + T("annual_rent"),         fmt_period(wh['rent']))
+    m2.metric("📦 " + T("racking"),             fmt_period(wh['racking']))
+    m3.metric("🔐 " + T("security_cabling"),    fmt_period(wh['security'] + wh['cabling']))
+    m4.metric("🏠 Office+Equip",                fmt_period(wh['office']))
+    m5.metric(f"📋 {T('total')}",               fmt_period(wh['total']))
     nav(2)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -592,7 +675,7 @@ def step4():
         st.session_state.d["personnel_op"] = [dict(p) for p in AKZO_PERSONNEL_OP]
 
     cols_h = st.columns([3, 1.2, 1.8, 1.2, 1.2, 1.5, 1.5])
-    for c, lbl in zip(cols_h, [T("s4_role"), T("s4_qty"), T("s4_salary"), T("s4_illness"), T("s4_holidays"), T("s4_weekly_h"), T("s4_allowance")]):
+    for c, lbl in zip(cols_h, [T("s4_role"), T("s4_qty"), cur_label(T("s4_salary")), T("s4_illness"), T("s4_holidays"), T("s4_weekly_h"), T("s4_allowance")]):
         c.markdown(f"**{lbl}**")
 
     total_op_var = 0
@@ -600,7 +683,7 @@ def step4():
         cols = st.columns([3, 1.2, 1.8, 1.2, 1.2, 1.5, 1.5])
         cols[0].markdown(f"*{p['role_fr'] if lang == 'FR' else p['role_en']}*")
         p["qty"]       = cols[1].number_input("", value=float(p.get("qty", 0)),        key=f"op_q_{i}",  min_value=0.0, max_value=20.0, step=0.5,    label_visibility="collapsed")
-        p["salary"]    = cols[2].number_input("", value=float(p.get("salary", 0)),     key=f"op_s_{i}",  min_value=0.0, step=100.0,     label_visibility="collapsed")
+        sal_disp = to_display(float(p.get("salary", 0))); new_sal = cols[2].number_input("", value=sal_disp, key=f"op_s_{i}", min_value=0.0, step=round(cur_rate()*100,0) or 100.0, label_visibility="collapsed"); p["salary"] = from_display(new_sal)
         p["illness"]   = cols[3].number_input("", value=float(p.get("illness", 4.97)), key=f"op_il_{i}", min_value=0.0, max_value=50.0, step=0.1,  format="%.2f", label_visibility="collapsed")
         p["holidays"]  = cols[4].number_input("", value=float(p.get("holidays", 25)),  key=f"op_h_{i}",  min_value=0.0, max_value=50.0, step=1.0,    label_visibility="collapsed")
         p["weekly_h"]  = cols[5].number_input("", value=float(p.get("weekly_h", 44)),  key=f"op_w_{i}",  min_value=0.0, max_value=60.0, step=1.0,    label_visibility="collapsed")
@@ -614,7 +697,7 @@ def step4():
         st.session_state.d["personnel_adm"] = [dict(p) for p in AKZO_PERSONNEL_ADM]
 
     cols_h2 = st.columns([3, 1.2, 1.8, 1.2, 1.2, 1.5])
-    for c, lbl in zip(cols_h2, [T("s4_role"), T("s4_qty"), T("s4_salary"), T("s4_illness"), T("s4_holidays"), T("s4_weekly_h")]):
+    for c, lbl in zip(cols_h2, [T("s4_role"), T("s4_qty"), cur_label(T("s4_salary")), T("s4_illness"), T("s4_holidays"), T("s4_weekly_h")]):
         c.markdown(f"**{lbl}**")
 
     total_adm_fix = 0
@@ -622,7 +705,7 @@ def step4():
         cols = st.columns([3, 1.2, 1.8, 1.2, 1.2, 1.5])
         cols[0].markdown(f"*{p['role_fr'] if lang == 'FR' else p['role_en']}*")
         p["qty"]      = cols[1].number_input("", value=float(p.get("qty", 0)),        key=f"adm_q_{i}",  min_value=0.0, max_value=10.0, step=0.25,   label_visibility="collapsed")
-        p["salary"]   = cols[2].number_input("", value=float(p.get("salary", 0)),     key=f"adm_s_{i}",  min_value=0.0, step=100.0,     label_visibility="collapsed")
+        sal_disp_adm = to_display(float(p.get("salary", 0))); new_sal_adm = cols[2].number_input("", value=sal_disp_adm, key=f"adm_s_{i}", min_value=0.0, step=max(1.0, round(cur_rate()*100, 0)), label_visibility="collapsed"); p["salary"] = from_display(new_sal_adm)
         p["illness"]  = cols[3].number_input("", value=float(p.get("illness", 4.97)), key=f"adm_il_{i}", min_value=0.0, max_value=50.0, step=0.1, format="%.2f", label_visibility="collapsed")
         p["holidays"] = cols[4].number_input("", value=float(p.get("holidays", 25)),  key=f"adm_h_{i}",  min_value=0.0, max_value=50.0, step=1.0,    label_visibility="collapsed")
         p["weekly_h"] = cols[5].number_input("", value=float(p.get("weekly_h", 44)),  key=f"adm_w_{i}",  min_value=0.0, max_value=60.0, step=1.0,    label_visibility="collapsed")
@@ -635,7 +718,7 @@ def step4():
         st.session_state.d["personnel_mgmt"] = [dict(p) for p in AKZO_PERSONNEL_MGMT]
 
     cols_h3 = st.columns([3, 1.5, 2])
-    for c, lbl in zip(cols_h3, [T("s4_role"), T("s4_qty"), T("s4_salary")]):
+    for c, lbl in zip(cols_h3, [T("s4_role"), T("s4_qty"), cur_label(T("s4_salary"))]):
         c.markdown(f"**{lbl}**")
 
     total_mgmt_fix = 0
@@ -643,7 +726,7 @@ def step4():
         cols = st.columns([3, 1.5, 2])
         cols[0].markdown(f"*{p['role_fr'] if lang == 'FR' else p['role_en']}*")
         p["qty"]    = cols[1].number_input("", value=float(p.get("qty", 0)),    key=f"mgmt_q_{i}", min_value=0.0, max_value=5.0, step=0.05, format="%.2f", label_visibility="collapsed")
-        p["salary"] = cols[2].number_input("", value=float(p.get("salary", 0)), key=f"mgmt_s_{i}", min_value=0.0, step=100.0, label_visibility="collapsed")
+        sal_disp_mgmt = to_display(float(p.get("salary", 0))); new_sal_mgmt = cols[2].number_input("", value=sal_disp_mgmt, key=f"mgmt_s_{i}", min_value=0.0, step=max(1.0, round(cur_rate()*100, 0)), label_visibility="collapsed"); p["salary"] = from_display(new_sal_mgmt)
         if p["qty"] > 0 and p["salary"] > 0:
             total_mgmt_fix += calc_personnel_annual(p["salary"], p["qty"], sc)
 
@@ -661,9 +744,9 @@ def step4():
     st.markdown("---")
     pc1, pc2, pc3, pc4 = st.columns(4)
     pc1.metric("👥 Total FTE", f"{total_fte:.2f}")
-    pc2.metric(T("variable_costs"), f"{total_var:,.0f} €")
-    pc3.metric(T("fixed_costs"),    f"{total_fix:,.0f} €")
-    pc4.metric(f"💰 {T('total')}",  f"{total_pers:,.0f} €")
+    pc2.metric(T("variable_costs") + f" ({period_label()})", fmt_period(total_var))
+    pc3.metric(T("fixed_costs") + f" ({period_label()})",    fmt_period(total_fix))
+    pc4.metric(f"💰 {T('total')} ({period_label()})",        fmt_period(total_pers))
     nav(3)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -681,7 +764,10 @@ def step5():
 
     # Header row
     hc = st.columns([3.5, 0.8, 1.8, 1.8, 1.5, 1.2, 1.8])
-    for c, lbl in zip(hc, [T("s5_truck"), T("s5_qty"), T("s5_rent_purchase"), T("s5_price"), T("s5_battery"), T("s5_depr_years"), "Annual Cost (€)"]):
+    sym = cur_symbol()
+    for c, lbl in zip(hc, [T("s5_truck"), T("s5_qty"), T("s5_rent_purchase"),
+                            f"{T('s5_price')} ({sym})", f"{T('s5_battery')} ({sym})",
+                            T("s5_depr_years"), f"Annual Cost ({sym})"]):
         c.markdown(f"**{lbl}**")
 
     total_trucks = 0
@@ -691,17 +777,17 @@ def step5():
         cols[0].markdown(f"*{name}* `{tk['code']}`")
         tk["qty"]           = cols[1].number_input("", value=float(tk.get("qty", 0)),          key=f"tk_q_{i}",  min_value=0.0, max_value=20.0, step=0.5,    label_visibility="collapsed")
         tk["rent_purchase"] = cols[2].selectbox("",   ["External Rent", "Purchase"],            key=f"tk_rp_{i}", index=0 if tk.get("rent_purchase") == "External Rent" else 1, label_visibility="collapsed")
-        tk["price"]         = cols[3].number_input("", value=float(tk.get("price", 0)),         key=f"tk_pr_{i}", min_value=0.0, step=100.0,     label_visibility="collapsed")
-        tk["battery"]       = cols[4].number_input("", value=float(tk.get("battery", 0)),       key=f"tk_ba_{i}", min_value=0.0, step=100.0,     label_visibility="collapsed")
+        tk["price"]         = from_display(cols[3].number_input("", value=to_display(float(tk.get("price", 0))),   key=f"tk_pr_{i}", min_value=0.0, step=max(1.0, round(cur_rate()*100,0)), label_visibility="collapsed"))
+        tk["battery"]       = from_display(cols[4].number_input("", value=to_display(float(tk.get("battery", 0))), key=f"tk_ba_{i}", min_value=0.0, step=max(1.0, round(cur_rate()*100,0)), label_visibility="collapsed"))
         tk["depr_years"]    = cols[5].number_input("", value=float(tk.get("depr_years", 6)),    key=f"tk_dy_{i}", min_value=1.0, max_value=20.0, step=1.0,    label_visibility="collapsed")
         annual = calc_truck_annual(tk["price"], tk["battery"], tk["qty"], tk["rent_purchase"], tk["depr_years"], r)
         tk["annual_cost"] = annual
-        cols[6].markdown(f"**{annual:,.0f} €**" if tk["qty"] > 0 else "—")
+        cols[6].markdown(f"**{fmt_period(annual)}**" if tk["qty"] > 0 else "—")
         total_trucks += annual
 
     put("trucks_total", total_trucks)
     st.markdown("---")
-    st.metric(f"🚜 {T('s5_title')} — TOTAL", f"{total_trucks:,.0f} €")
+    st.metric(f"🚜 {T('s5_title')} — {T('total')} ({period_label()})", fmt_period(total_trucks))
     nav(4)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -779,7 +865,11 @@ def step7():
 
     # Header
     hc = st.columns([3, 2, 1.5, 1.8, 1.8, 1.8, 1.5])
-    for c, lb in zip(hc, [T("s7_process"), T("s7_unit"), T("s7_volume"), T("s7_price"), T("s7_ca"), T("s7_cost"), T("s7_margin")]):
+    sym = cur_symbol()
+    pl  = period_label()
+    for c, lb in zip(hc, [T("s7_process"), T("s7_unit"), T("s7_volume"),
+                          f"{T('s7_price')} ({sym})", f"{T('s7_ca')} ({pl} · {sym})",
+                          f"{T('s7_cost')} ({pl} · {sym})", T("s7_margin")]):
         c.markdown(f"**{lb}**")
 
     total_ca = 0; total_cost = 0
@@ -801,8 +891,15 @@ def step7():
         cols[1].markdown(f"*{unit}*")
         cols[2].markdown(f"{vol_disp}")
 
-        p["price"] = cols[3].number_input("", value=float(p.get("price", 0)), key=f"pr_{i}",
-                                          min_value=0.0, step=0.0001, format="%.4f", label_visibility="collapsed")
+        # Price input: show in display currency, store in EUR
+        price_eur = float(p.get("price", 0))
+        price_display = to_display(price_eur)
+        new_price_display = cols[3].number_input("", value=price_display, key=f"pr_{i}",
+                                                 min_value=0.0, step=0.0001 if st.session_state.currency == "EUR" else 0.001,
+                                                 format="%.4f" if st.session_state.currency == "EUR" else "%.3f",
+                                                 label_visibility="collapsed")
+        # Convert back to EUR for storage
+        p["price"] = from_display(new_price_display)
 
         # CA
         if code == "storage":
@@ -818,8 +915,8 @@ def step7():
         profit = ca - cost
         margin = profit / ca * 100 if ca > 0 else 0
 
-        cols[4].markdown(f"**{ca:,.0f} €**")
-        cols[5].markdown(f"{cost:,.0f} €")
+        cols[4].markdown(f"**{fmt_period(ca)}**")
+        cols[5].markdown(f"{fmt_period(cost)}")
         color = "green" if margin > 0 else "red"
         cols[6].markdown(f":{color}[**{margin:.1f}%**]")
 
@@ -836,9 +933,9 @@ def step7():
 
     st.markdown("---")
     rc1, rc2, rc3, rc4 = st.columns(4)
-    rc1.metric("CA Total", f"{total_ca:,.0f} €")
-    rc2.metric("Coûts Processus" if lang == "FR" else "Process Costs", f"{total_cost:,.0f} €")
-    rc3.metric("WMS + HO", f"{wms_cost + ho_cost:,.0f} €")
+    rc1.metric(f"CA {pl}" if lang == "FR" else f"Turnover {pl}", fmt_period(total_ca))
+    rc2.metric("Coûts Processus" if lang == "FR" else "Process Costs", fmt_period(total_cost))
+    rc3.metric("WMS + HO", fmt_period(wms_cost + ho_cost))
     ind_profit = total_ca - total_cost - wms_cost - ho_cost
     ind_margin = ind_profit / total_ca * 100 if total_ca > 0 else 0
     rc4.metric("Marge Indicative" if lang == "FR" else "Indicative Margin", f"{ind_margin:.1f}%",
@@ -869,11 +966,12 @@ def step8():
     gap         = margin - target
 
     # ── KPIs ──
-    st.subheader("🎯 " + ("Key Metrics" if lang == "EN" else "Indicateurs Clés"))
+    pl = period_label()
+    st.subheader("🎯 " + ("Key Metrics" if lang == "EN" else "Indicateurs Clés") + f"  *— {pl} · {cur_symbol()}*")
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric(T("s8_ca"),     f"{total_ca:,.0f} €")
-    k2.metric(T("s8_cost"),   f"{total_costs:,.0f} €")
-    k3.metric(T("s8_profit"), f"{profit:,.0f} €")
+    k1.metric(T("s8_ca"),     fmt_period(total_ca))
+    k2.metric(T("s8_cost"),   fmt_period(total_costs))
+    k3.metric(T("s8_profit"), fmt_period(profit))
     k4.metric(T("s8_margin"), f"{margin:.2f}%", delta=f"{gap:+.2f}% vs {target:.1f}%",
               delta_color="normal" if gap >= 0 else "inverse")
 
@@ -883,7 +981,7 @@ def step8():
         st.error(f"❌ {'Margin' if lang == 'EN' else 'Marge'} {margin:.2f}% < {'Target' if lang == 'EN' else 'Cible'} {target:.1f}%")
 
     # ── Cost Breakdown ──
-    st.subheader("💰 " + T("cost_breakdown"))
+    st.subheader("💰 " + T("cost_breakdown") + f"  *({pl} · {cur_symbol()})*")
     items = [
         (T("cost_wh"),    wh_total,  "🏭"),
         (T("cost_pers"),  per_total, "👷"),
@@ -895,10 +993,10 @@ def step8():
     for c, (label, val, icon) in zip(bc, items):
         pct_cost = val / total_costs * 100 if total_costs > 0 else 0
         pct_ca   = val / total_ca * 100 if total_ca > 0 else 0
-        c.metric(f"{icon} {label}", f"{val:,.0f} €", delta=f"{pct_ca:.1f}% CA")
+        c.metric(f"{icon} {label}", fmt_period(val), delta=f"{pct_ca:.1f}% CA")
 
     # ── Revenue Breakdown ──
-    st.subheader("📈 " + T("revenue_breakdown"))
+    st.subheader("📈 " + T("revenue_breakdown") + f"  *({pl} · {cur_symbol()})*")
     lines = []
     for p in d.get("prices", AKZO_PRICES):
         ca_v = p.get("ca", 0)
@@ -908,19 +1006,21 @@ def step8():
             lines.append((name, ca_v, pct))
     lines.sort(key=lambda x: x[1], reverse=True)
     r_cols = st.columns([3, 2, 1])
-    r_cols[0].markdown("**Ligne / Line**"); r_cols[1].markdown("**CA**"); r_cols[2].markdown("**%**")
+    r_cols[0].markdown("**Ligne / Line**")
+    r_cols[1].markdown(f"**CA ({pl} · {cur_symbol()})**")
+    r_cols[2].markdown("**%**")
     for name, ca_v, pct in lines:
         rc = st.columns([3, 2, 1])
-        rc[0].markdown(f"*{name}*"); rc[1].markdown(f"{ca_v:,.0f} €"); rc[2].markdown(f"{pct:.1f}%")
+        rc[0].markdown(f"*{name}*"); rc[1].markdown(fmt_period(ca_v)); rc[2].markdown(f"{pct:.1f}%")
 
     # ── Cost per m² and per location ──
     st.subheader("🔢 " + ("Efficiency Ratios" if lang == "EN" else "Ratios d'Efficacité"))
     surf = float(get("wh_surface", 1600)); net_loc = float(get("net_loc", 1567))
     rat1, rat2, rat3, rat4 = st.columns(4)
-    rat1.metric("CA/m²",          f"{total_ca / surf:,.0f} €" if surf > 0 else "—")
-    rat2.metric("CA/emplacement" if lang == "FR" else "CA/location", f"{total_ca / net_loc:,.0f} €" if net_loc > 0 else "—")
-    rat3.metric("Coût/m²" if lang == "FR" else "Cost/m²", f"{total_costs / surf:,.0f} €" if surf > 0 else "—")
-    rat4.metric("Profit/FTE",     f"{profit / float(get('personnel_fte', 4.85)):,.0f} €" if get("personnel_fte", 4.85) > 0 else "—")
+    rat1.metric("CA/m²",          fmt_period(total_ca / surf) if surf > 0 else "—")
+    rat2.metric("CA/emplacement" if lang == "FR" else "CA/location", fmt_period(total_ca / net_loc) if net_loc > 0 else "—")
+    rat3.metric("Coût/m²" if lang == "FR" else "Cost/m²", fmt_period(total_costs / surf) if surf > 0 else "—")
+    rat4.metric("Profit/FTE",     fmt_period(profit / float(get('personnel_fte', 4.85))) if get("personnel_fte", 4.85) > 0 else "—")
 
     # ── Project Card ──
     st.markdown("---")
